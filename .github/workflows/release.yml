@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update version in source
+        run: |
+          sed -i '' 's/version: "[^"]*"/version: "${{ steps.version.outputs.version }}"/' Sources/growlrrr/Growlrrr.swift
+
+      - name: Build release
+        id: build
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/release.sh ${{ steps.version.outputs.version }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/growlrrr-${{ steps.version.outputs.version }}-macos.tar.gz
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output SHA256
+        run: |
+          echo "### Release Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Archive:** growlrrr-${{ steps.version.outputs.version }}-macos.tar.gz" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**SHA256:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          shasum -a 256 dist/growlrrr-${{ steps.version.outputs.version }}-macos.tar.gz >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  update-homebrew:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref, '-') }}  # Skip for pre-releases
+
+    steps:
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Get SHA256 from release
+        id: sha256
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET_NAME="growlrrr-${{ steps.version.outputs.version }}-macos.tar.gz"
+          SHA256=$(gh api repos/moltenbits/growlrrr/releases/tags/v${{ steps.version.outputs.version }} \
+            --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .digest" \
+            | sed 's/sha256://')
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: moltenbits/homebrew-tap
+          token: ${{ secrets.HOMEBREW_CASK_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update cask
+        run: |
+          mkdir -p homebrew-tap/Casks
+          cat > homebrew-tap/Casks/growlrrr.rb << 'EOF'
+          cask "growlrrr" do
+            version "${{ steps.version.outputs.version }}"
+            sha256 "${{ steps.sha256.outputs.sha256 }}"
+
+            url "https://github.com/moltenbits/growlrrr/releases/download/v#{version}/growlrrr-#{version}-macos.tar.gz"
+            name "growlrrr"
+            desc "Modern CLI tool for macOS notifications"
+            homepage "https://github.com/moltenbits/growlrrr"
+
+            depends_on macos: ">= :ventura"
+
+            app "growlrrr.app"
+            binary "#{appdir}/growlrrr.app/Contents/MacOS/growlrrr"
+            binary "#{appdir}/growlrrr.app/Contents/MacOS/growlrrr", target: "grrr"
+
+            caveats <<~EOS
+              growlrrr requires notification permissions. On first run, allow
+              notifications when prompted or enable in System Settings > Notifications.
+
+              Note: Only actively tested on macOS Tahoe (26). May work on Ventura and later.
+            EOS
+          end
+          EOF
+
+          echo "Updated Casks/growlrrr.rb:"
+          cat homebrew-tap/Casks/growlrrr.rb
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/growlrrr.rb
+          git commit -m "growlrrr ${{ steps.version.outputs.version }}"
+          git push

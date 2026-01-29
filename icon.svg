@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Main body with ears - traced from original -->
+  <g transform="translate(0,512) scale(0.1,-0.1)">
+    <path fill="#E17055" d="M1599 3811 c-285 -666 -306 -711 -332 -716 -49 -12 -146 -85 -187
+-142 -80 -112 -75 -36 -75 -1143 0 -920 1 -988 18 -1030 45 -113 142 -209 250
+-247 49 -17 124 -18 1292 -18 1168 0 1243 1 1292 18 108 38 205 134 250 247
+17 42 18 110 18 1030 0 1107 5 1031 -75 1143 -41 57 -138 130 -187 142 -26 5
+-47 50 -332 716 -167 390 -305 708 -308 706 -2 -3 -138 -317 -301 -698 l-298
+-694 -59 0 -59 0 -298 694 c-163 381 -299 695 -301 698 -3 2 -141 -316 -308
+-706z"/>
+  </g>
+  <!-- Eyes -->
+  <circle cx="179" cy="330" r="34" fill="#FFFFFF"/>
+  <circle cx="333" cy="330" r="34" fill="#FFFFFF"/>
+  <!-- Alert lines - left (dark color for visibility on light backgrounds) -->
+  <line x1="88" y1="117" x2="52" y2="73" stroke="#2D3436" stroke-width="14" stroke-linecap="round"/>
+  <line x1="70" y1="163" x2="34" y2="132" stroke="#2D3436" stroke-width="14" stroke-linecap="round"/>
+  <!-- Alert lines - right -->
+  <line x1="424" y1="117" x2="460" y2="73" stroke="#2D3436" stroke-width="14" stroke-linecap="round"/>
+  <line x1="442" y1="163" x2="478" y2="132" stroke="#2D3436" stroke-width="14" stroke-linecap="round"/>
+</svg>
