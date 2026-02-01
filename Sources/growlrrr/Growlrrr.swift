@@ -409,6 +409,9 @@ extension Growlrrr {
         @Flag(name: .customLong("printId"), help: "Output notification identifier to stdout")
         var printId: Bool = false
 
+        @Flag(name: .long, help: "Reactivate the terminal window when notification is clicked")
+        var reactivate: Bool = false
+
         func run() async throws {
             // Handle custom app
             if let appId = appId {
@@ -436,6 +439,20 @@ extension Growlrrr {
         }
 
         private func sendNotification() async throws {
+            // Determine execute command (may be overridden by --reactivate)
+            var executeCommand = execute
+
+            if reactivate {
+                if let reactivateScript = generateReactivateScript() {
+                    // Combine with existing execute if present
+                    if let existing = executeCommand {
+                        executeCommand = "\(reactivateScript) ; \(existing)"
+                    } else {
+                        executeCommand = reactivateScript
+                    }
+                }
+            }
+
             let config = NotificationConfig(
                 message: message,
                 title: title,
@@ -443,7 +460,7 @@ extension Growlrrr {
                 sound: SoundOption.from(sound),
                 imagePath: image,
                 open: open.flatMap { URL(string: $0) },
-                execute: execute,
+                execute: executeCommand,
                 identifier: identifier ?? UUID().uuidString,
                 threadId: threadId,
                 category: category
@@ -476,6 +493,194 @@ extension Growlrrr {
                 // The trigger has 0.1s delay, we need to let the run loop process it
                 try await service.waitForDelivery(identifier: notificationId)
             }
+        }
+
+        private func generateReactivateScript() -> String? {
+            let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"]
+
+            switch termProgram {
+            case "iTerm.app":
+                return generateITermReactivateScript()
+            case "Apple_Terminal":
+                return generateTerminalReactivateScript()
+            case "WarpTerminal":
+                return "osascript -e 'tell application \"Warp\" to activate'"
+            case "Alacritty":
+                return "osascript -e 'tell application \"Alacritty\" to activate'"
+            case "kitty":
+                return "osascript -e 'tell application \"kitty\" to activate'"
+            default:
+                // Try to detect from parent process or fall back to generic activation
+                if let bundleId = detectTerminalBundleId() {
+                    return "osascript -e 'tell application id \"\(bundleId)\" to activate'"
+                }
+                return nil
+            }
+        }
+
+        private func generateITermReactivateScript() -> String? {
+            // Capture the current iTerm2 session ID
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            task.arguments = ["-e", "tell application \"iTerm2\" to id of current session of current window"]
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = FileHandle.nullDevice
+
+            do {
+                try task.run()
+                task.waitUntilExit()
+
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                guard let sessionId = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !sessionId.isEmpty else {
+                    // Fallback to just activating iTerm2
+                    return "osascript -e 'tell application \"iTerm2\" to activate'"
+                }
+
+                // Generate AppleScript that finds and focuses this specific session
+                // Use heredoc to preserve newlines which AppleScript requires
+                return """
+                    osascript <<'APPLESCRIPT'
+                    tell application "iTerm2"
+                        repeat with w in windows
+                            repeat with t in tabs of w
+                                repeat with s in sessions of t
+                                    if id of s is "\(sessionId)" then
+                                        select t
+                                        select w
+                                        activate
+                                        return
+                                    end if
+                                end repeat
+                            end repeat
+                        end repeat
+                    end tell
+                    APPLESCRIPT
+                    """
+            } catch {
+                return "osascript -e 'tell application \"iTerm2\" to activate'"
+            }
+        }
+
+        private func generateTerminalReactivateScript() -> String? {
+            // Capture the current Terminal.app window and tab
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            task.arguments = ["-e", """
+                tell application "Terminal"
+                    set windowId to id of front window
+                    set tabIndex to index of selected tab of front window
+                    return (windowId as text) & "," & (tabIndex as text)
+                end tell
+                """]
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = FileHandle.nullDevice
+
+            do {
+                try task.run()
+                task.waitUntilExit()
+
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                guard let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !output.isEmpty else {
+                    return "osascript -e 'tell application \"Terminal\" to activate'"
+                }
+
+                let parts = output.split(separator: ",")
+                guard parts.count == 2,
+                      let windowId = Int(parts[0]),
+                      let tabIndex = Int(parts[1]) else {
+                    return "osascript -e 'tell application \"Terminal\" to activate'"
+                }
+
+                // Generate AppleScript that finds and focuses this specific window/tab
+                // Use heredoc to preserve newlines which AppleScript requires
+                return """
+                    osascript <<'APPLESCRIPT'
+                    tell application "Terminal"
+                        repeat with w in windows
+                            if id of w is \(windowId) then
+                                set selected tab of w to tab \(tabIndex) of w
+                                set frontmost of w to true
+                                activate
+                                return
+                            end if
+                        end repeat
+                    end tell
+                    APPLESCRIPT
+                    """
+            } catch {
+                return "osascript -e 'tell application \"Terminal\" to activate'"
+            }
+        }
+
+        private func detectTerminalBundleId() -> String? {
+            // Try to find the terminal by walking up the process tree
+            var pid = getppid()
+            while pid > 1 {
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/bin/ps")
+                task.arguments = ["-p", String(pid), "-o", "comm="]
+
+                let pipe = Pipe()
+                task.standardOutput = pipe
+                task.standardError = FileHandle.nullDevice
+
+                do {
+                    try task.run()
+                    task.waitUntilExit()
+
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    if let comm = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                        // Map common terminal process names to bundle IDs
+                        switch comm {
+                        case "iTerm2", "iTerm":
+                            return "com.googlecode.iterm2"
+                        case "Terminal":
+                            return "com.apple.Terminal"
+                        case "Warp":
+                            return "dev.warp.Warp-Stable"
+                        case "Alacritty":
+                            return "org.alacritty"
+                        case "kitty":
+                            return "net.kovidgoyal.kitty"
+                        default:
+                            break
+                        }
+                    }
+                } catch {
+                    break
+                }
+
+                // Get parent PID
+                let ppidTask = Process()
+                ppidTask.executableURL = URL(fileURLWithPath: "/bin/ps")
+                ppidTask.arguments = ["-p", String(pid), "-o", "ppid="]
+
+                let ppidPipe = Pipe()
+                ppidTask.standardOutput = ppidPipe
+                ppidTask.standardError = FileHandle.nullDevice
+
+                do {
+                    try ppidTask.run()
+                    ppidTask.waitUntilExit()
+
+                    let data = ppidPipe.fileHandleForReading.readDataToEndOfFile()
+                    if let ppidStr = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       let newPid = Int32(ppidStr) {
+                        pid = newPid
+                    } else {
+                        break
+                    }
+                } catch {
+                    break
+                }
+            }
+            return nil
         }
     }
 }

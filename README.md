@@ -82,6 +82,12 @@ grrr --execute "open -a Safari" "Click to open browser"
 # Run a script when clicked
 grrr --execute "./scripts/deploy.sh" "Ready to deploy - click to start"
 
+# Reactivate the originating terminal when clicked
+# For iTerm2 and Terminal.app, reactivates the specific window/tab
+# For other terminals (Warp, Alacritty, kitty), activates the app
+# (Window-level control requires AppleScript support, which most terminals lack)
+grrr --reactivate "Task complete - click to return"
+
 # Chain commands
 grrr --execute "cd ~/project && make test" "Click to run tests"
 
@@ -194,6 +200,7 @@ grrr authorize --open-settings
 | `--category` | Category identifier for actionable notifications |
 | `--wait` | Wait for user interaction before exiting |
 | `--printId` | Output notification identifier to stdout |
+| `--reactivate` | Reactivate the originating terminal when clicked. For iTerm2/Terminal.app, focuses the specific window/tab. For others, activates the app. |
 
 ### Apps Subcommands
 
