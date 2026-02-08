@@ -564,17 +564,19 @@ extension Growlrrr {
         }
 
         private func generateITermReactivateBySessionId(_ sessionId: String) -> String {
-            // Use heredoc to preserve newlines which AppleScript requires
+            // Use heredoc to preserve newlines which AppleScript requires.
+            // activate must come before select so the tab switch isn't
+            // clobbered by the focus transition from Notification Center.
             return """
                 osascript <<'APPLESCRIPT'
                 tell application "iTerm2"
+                    activate
                     repeat with w in windows
                         repeat with t in tabs of w
                             repeat with s in sessions of t
                                 if id of s is "\(sessionId)" then
-                                    select t
                                     select w
-                                    activate
+                                    select t
                                     return
                                 end if
                             end repeat
@@ -589,13 +591,13 @@ extension Growlrrr {
             return """
                 osascript <<'APPLESCRIPT'
                 tell application "iTerm2"
+                    activate
                     repeat with w in windows
                         repeat with t in tabs of w
                             repeat with s in sessions of t
                                 if tty of s is "\(ttyPath)" then
-                                    select t
                                     select w
-                                    activate
+                                    select t
                                     return
                                 end if
                             end repeat
