@@ -519,7 +519,26 @@ extension Growlrrr {
         }
 
         private func generateITermReactivateScript() -> String? {
-            // Capture the current iTerm2 session ID
+            // Strategy 1: Use ITERM_SESSION_ID environment variable.
+            // iTerm2 sets this directly in every session. This avoids the
+            // AppleScript "current window" call which can fail when a Profile
+            // uses a customized window name.
+            // Format is "w{n}t{n}p{n}:{GUID}" — the AppleScript id property
+            // returns just the GUID portion, so we strip the prefix.
+            if let envSessionId = ProcessInfo.processInfo.environment["ITERM_SESSION_ID"],
+               !envSessionId.isEmpty {
+                let sessionId = envSessionId.split(separator: ":").last.map(String.init) ?? envSessionId
+                return generateITermReactivateBySessionId(sessionId)
+            }
+
+            // Strategy 2: Use tty path to identify the session.
+            // Completely independent of iTerm2's window/session naming.
+            if isatty(STDIN_FILENO) != 0, let ttyName = ttyname(STDIN_FILENO) {
+                let ttyPath = String(cString: ttyName)
+                return generateITermReactivateByTty(ttyPath)
+            }
+
+            // Strategy 3: Original AppleScript approach (works when no custom window name).
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
             task.arguments = ["-e", "tell application \"iTerm2\" to id of current session of current window"]
@@ -535,33 +554,56 @@ extension Growlrrr {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 guard let sessionId = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !sessionId.isEmpty else {
-                    // Fallback to just activating iTerm2
                     return "osascript -e 'tell application \"iTerm2\" to activate'"
                 }
 
-                // Generate AppleScript that finds and focuses this specific session
-                // Use heredoc to preserve newlines which AppleScript requires
-                return """
-                    osascript <<'APPLESCRIPT'
-                    tell application "iTerm2"
-                        repeat with w in windows
-                            repeat with t in tabs of w
-                                repeat with s in sessions of t
-                                    if id of s is "\(sessionId)" then
-                                        select t
-                                        select w
-                                        activate
-                                        return
-                                    end if
-                                end repeat
-                            end repeat
-                        end repeat
-                    end tell
-                    APPLESCRIPT
-                    """
+                return generateITermReactivateBySessionId(sessionId)
             } catch {
                 return "osascript -e 'tell application \"iTerm2\" to activate'"
             }
+        }
+
+        private func generateITermReactivateBySessionId(_ sessionId: String) -> String {
+            // Use heredoc to preserve newlines which AppleScript requires
+            return """
+                osascript <<'APPLESCRIPT'
+                tell application "iTerm2"
+                    repeat with w in windows
+                        repeat with t in tabs of w
+                            repeat with s in sessions of t
+                                if id of s is "\(sessionId)" then
+                                    select t
+                                    select w
+                                    activate
+                                    return
+                                end if
+                            end repeat
+                        end repeat
+                    end repeat
+                end tell
+                APPLESCRIPT
+                """
+        }
+
+        private func generateITermReactivateByTty(_ ttyPath: String) -> String {
+            return """
+                osascript <<'APPLESCRIPT'
+                tell application "iTerm2"
+                    repeat with w in windows
+                        repeat with t in tabs of w
+                            repeat with s in sessions of t
+                                if tty of s is "\(ttyPath)" then
+                                    select t
+                                    select w
+                                    activate
+                                    return
+                                end if
+                            end repeat
+                        end repeat
+                    end repeat
+                end tell
+                APPLESCRIPT
+                """
         }
 
         private func generateTerminalReactivateScript() -> String? {
