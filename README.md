@@ -182,6 +182,45 @@ grrr authorize --status
 grrr authorize --open-settings
 ```
 
+### Automatic notifications for long-running commands
+
+Add to your `~/.zshrc` (or `~/.bashrc`):
+
+```bash
+eval "$(grrr init)"
+```
+
+Any command that runs longer than 10 seconds will automatically send a notification when it finishes. Clicking the notification reactivates your terminal window/tab.
+
+#### Configuration
+
+| Variable | Description | Default |
+|---|---|---|
+| `GROWLRRR_THRESHOLD` | Minimum seconds before notifying | `10` |
+| `GROWLRRR_IGNORE` | Colon-separated commands to skip | `vim:nvim:vi:less:more:man:ssh:top:htop:tail:watch:tmux:screen` |
+| `GROWLRRR_ENABLED` | Set to `0` to disable | `1` |
+| `GROWLRRR_TITLE` | Fixed title; the default `✅ cmd` / `❌ cmd` moves to subtitle | _(none)_ |
+| `GROWLRRR_APPID` | Custom app to send from (see `grrr apps add`) | _(none)_ |
+
+```bash
+# Notify after 30 seconds instead of 10
+export GROWLRRR_THRESHOLD=30
+
+# Also ignore docker and kubectl
+export GROWLRRR_IGNORE="vim:nvim:vi:less:more:man:ssh:top:htop:tail:watch:tmux:screen:docker:kubectl"
+
+# Use a fixed title — command status moves to subtitle
+export GROWLRRR_TITLE="My Project"
+
+# Send from a custom app (for a distinct icon in Notification Center)
+export GROWLRRR_APPID=MyCIBot
+
+# Temporarily disable
+export GROWLRRR_ENABLED=0
+```
+
+To specify the shell explicitly: `eval "$(grrr init --shell zsh)"`.
+
 ## Options
 
 ### Send Options
