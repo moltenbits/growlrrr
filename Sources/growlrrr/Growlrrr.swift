@@ -490,9 +490,13 @@ extension Growlrrr {
                 try await service.waitForInteraction(identifier: notificationId)
             } else {
                 // Wait for notification to be delivered
-                // The trigger has 0.1s delay, we need to let the run loop process it
                 try await service.waitForDelivery(identifier: notificationId)
             }
+
+            // Remove from pending queue to prevent macOS from re-delivering.
+            // trigger:nil requests can linger in the pending queue after delivery,
+            // causing the system to re-present the notification periodically.
+            await service.clearPending(identifiers: [notificationId])
         }
 
         private func generateReactivateScript() -> String? {
