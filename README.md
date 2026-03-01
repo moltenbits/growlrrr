@@ -252,6 +252,42 @@ The hooks communicate through a tracking file in `~/.growlrrr/.tracked/` keyed b
 | `--appId` | Use a custom app (create with `grrr apps add`) | _(none)_ |
 | `--reactivate` / `--no-reactivate` | Reactivate terminal on click | `--reactivate` |
 
+### Activate notifications via keyboard shortcut
+
+`grrr activate` replays the action of the oldest delivered notification and clears it from Notification Center. For Claude Code notifications, this reactivates the terminal that needs attention. Run it repeatedly to work through queued notifications in FIFO order.
+
+```bash
+# Activate the oldest delivered notification
+grrr activate
+```
+
+Bind to a keyboard shortcut for mouse-free workflow:
+
+**Hammerspoon** (`~/.hammerspoon/init.lua`):
+```lua
+hs.hotkey.bind({"cmd", "shift"}, "n", function()
+  hs.execute("/usr/local/bin/grrr activate")
+end)
+```
+
+**skhd** (`~/.skhdrc`):
+```
+cmd + shift - n : /usr/local/bin/grrr activate
+```
+
+**BetterTouchTool**:
+1. Open BetterTouchTool and select **Keyboard Shortcuts** in the trigger type dropdown
+2. Click **+ Add New Shortcut** and record your shortcut (e.g. <kbd>⌘</kbd><kbd>⇧</kbd><kbd>N</kbd>)
+3. Set the action to **Execute Shell Script / Task**
+4. Set the launch path to `/usr/local/bin/grrr` and add `activate` as the parameter
+
+**Karabiner-Elements** (complex modification — shell_command):
+```json
+{ "shell_command": "/usr/local/bin/grrr activate" }
+```
+
+> **Tip:** Set growlrrr notifications to **Persistent** in System Settings > Notifications so they queue up instead of auto-dismissing, then use the keyboard shortcut to work through them.
+
 ## Options
 
 ### Send Options

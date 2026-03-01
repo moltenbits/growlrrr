@@ -110,7 +110,7 @@ struct Growlrrr: AsyncParsableCommand {
         commandName: "growlrrr",
         abstract: "A modern CLI tool for macOS notifications",
         version: "0.1.0",
-        subcommands: [Send.self, List.self, Clear.self, Authorize.self, Apps.self, Hook.self, Init.self],
+        subcommands: [Send.self, List.self, Clear.self, Authorize.self, Apps.self, Hook.self, Activate.self, Init.self],
         defaultSubcommand: Send.self
     )
 }
@@ -587,6 +587,56 @@ extension Growlrrr {
                         print("\(appLabel)\(notification.identifier): \(notification.title ?? "(no title)") - \(notification.body)")
                     }
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Activate Command
+
+extension Growlrrr {
+    struct Activate: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "activate",
+            abstract: "Replay the action of the oldest delivered notification"
+        )
+
+        func run() async throws {
+            let service = NotificationService()
+            let delivered = await service.listDeliveredDetails()
+
+            guard let oldest = delivered.first else {
+                return
+            }
+
+            // Run the embedded command (e.g. terminal reactivation script)
+            if let command = oldest.execute {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/bin/sh")
+                process.arguments = ["-c", command]
+                try? process.run()
+                process.waitUntilExit()
+            }
+
+            // Open URL if present
+            if let urlString = oldest.open, let url = URL(string: urlString) {
+                NSWorkspace.shared.open(url)
+            }
+
+            // Clear the notification
+            await service.clearDelivered(identifiers: [oldest.identifier])
+
+            // Clean up tracking file if this is a hook notification
+            if oldest.identifier.hasPrefix("growlrrr-hook-") {
+                let sessionId = String(oldest.identifier.dropFirst("growlrrr-hook-".count))
+                let trackedFile = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".growlrrr/.tracked/\(sessionId)")
+                try? FileManager.default.removeItem(at: trackedFile)
+            }
+
+            // RunLoop pass for notification system cleanup
+            await MainActor.run {
+                RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
             }
         }
     }

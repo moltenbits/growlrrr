@@ -224,6 +224,28 @@ actor NotificationService {
         }
     }
 
+    struct DeliveredNotificationDetail {
+        let identifier: String
+        let date: Date
+        let execute: String?
+        let open: String?
+    }
+
+    func listDeliveredDetails() async -> [DeliveredNotificationDetail] {
+        let notifications = await center.deliveredNotifications()
+        return notifications
+            .map { notification in
+                let userInfo = notification.request.content.userInfo
+                return DeliveredNotificationDetail(
+                    identifier: notification.request.identifier,
+                    date: notification.date,
+                    execute: userInfo["execute"] as? String,
+                    open: userInfo["open"] as? String
+                )
+            }
+            .sorted { $0.date < $1.date }
+    }
+
     // MARK: - Clearing Notifications
 
     func clearPending(identifiers: [String]) async {
