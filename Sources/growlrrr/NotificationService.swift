@@ -129,11 +129,15 @@ actor NotificationService {
             }
         }
 
-        // Create request with no trigger (immediate delivery)
+        // Use a short timer trigger instead of nil (immediate). A nil trigger can
+        // linger in the pending queue after delivery, causing macOS to periodically
+        // re-present the notification. Non-repeating timer triggers are automatically
+        // removed from the pending queue after firing.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
         let request = UNNotificationRequest(
             identifier: config.identifier,
             content: content,
-            trigger: nil
+            trigger: trigger
         )
 
         try await center.add(request)

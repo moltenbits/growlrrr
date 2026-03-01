@@ -221,6 +221,36 @@ export GROWLRRR_ENABLED=0
 
 To specify the shell explicitly: `eval "$(grrr init --shell zsh)"`.
 
+### Claude Code integration
+
+growlrrr integrates with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) hooks to replace its built-in notifications with native macOS notifications. The advantage over Claude Code's own notification system is that each terminal session can have its own notification identity via `--appId` — when you have multiple Claude Code sessions running, you can tell which one needs your attention. Clicking a notification reactivates the specific terminal window and tab it came from.
+
+**Important:** Disable Claude Code's built-in notifications to avoid redundant alerts. In Claude Code, run `/config` and set `"notifications"` to `"disabled"`, or pass `--notifications disabled` on the command line.
+
+Generate the hooks configuration:
+
+```bash
+grrr init --format claude-code
+```
+
+Copy the output into your project's `.claude/settings.json` (or merge into an existing one). This configures two hooks:
+
+- **Notification** — runs `grrr hook notify`, which reads the notification JSON from stdin and sends a native notification with terminal reactivation
+- **UserPromptSubmit** — runs `grrr hook dismiss`, which clears any outstanding notification for the current session
+
+The hooks communicate through a tracking file in `~/.growlrrr/.tracked/` keyed by `GROWLRRR_SESSION_ID`, so each terminal session's notifications are managed independently. The shell hooks from `grrr init` also check this directory, so returning to a regular shell prompt will dismiss Claude Code notifications too.
+
+#### Hook Options
+
+`grrr hook notify` accepts options to customize behavior:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--title`, `-t` | Notification title | `Growlrrr` |
+| `--sound` | Sound: `default`, `none`, or system sound name | `default` |
+| `--appId` | Use a custom app (create with `grrr apps add`) | _(none)_ |
+| `--reactivate` / `--no-reactivate` | Reactivate terminal on click | `--reactivate` |
+
 ## Options
 
 ### Send Options
