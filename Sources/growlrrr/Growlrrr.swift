@@ -427,6 +427,9 @@ extension Growlrrr {
         @Flag(name: .long, help: "Reactivate the terminal window when notification is clicked")
         var reactivate: Bool = false
 
+        @Flag(name: .long, help: "Replace any existing notification from this app instead of stacking")
+        var replace: Bool = false
+
         func run() async throws {
             // Handle custom app
             if let appId = appId {
@@ -476,7 +479,7 @@ extension Growlrrr {
                 imagePath: image,
                 open: open.flatMap { URL(string: $0) },
                 execute: executeCommand,
-                identifier: identifier ?? UUID().uuidString,
+                identifier: identifier ?? (replace ? "growlrrr-replace" : UUID().uuidString),
                 threadId: threadId,
                 category: category
             )

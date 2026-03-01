@@ -35,6 +35,9 @@ extension Growlrrr.Hook {
         @Flag(name: .long, inversion: .prefixedNo, help: "Reactivate the terminal window when notification is clicked")
         var reactivate: Bool = true
 
+        @Flag(name: .long, help: "Replace any existing notification instead of stacking a new one")
+        var replace: Bool = false
+
         func run() async throws {
             // Read JSON from stdin (blocks until EOF).
             // Supports two schemas:
@@ -72,9 +75,11 @@ extension Growlrrr.Hook {
                 throw ExitCode(1)
             }
 
-            // Derive stable notification identifier from session
+            // Derive notification identifier.
+            // --replace uses a fixed identifier so new notifications replace the existing one.
+            // Default uses a per-session identifier so each session gets its own notification.
             let sessionId = ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"] ?? "default"
-            let identifier = "growlrrr-hook-\(sessionId)"
+            let identifier = replace ? "growlrrr-hook" : "growlrrr-hook-\(sessionId)"
 
             // Build reactivate script
             var executeCommand: String? = nil
