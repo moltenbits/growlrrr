@@ -657,6 +657,16 @@ extension Growlrrr {
             return """
             {
               "hooks": {
+                "Stop": [
+                  {
+                    "hooks": [
+                      {
+                        "type": "command",
+                        "command": "grrr hook notify"
+                      }
+                    ]
+                  }
+                ],
                 "Notification": [
                   {
                     "hooks": [

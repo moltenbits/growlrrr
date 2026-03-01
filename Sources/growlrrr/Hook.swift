@@ -36,14 +36,16 @@ extension Growlrrr.Hook {
         var reactivate: Bool = true
 
         func run() async throws {
-            // Read all JSON from stdin (blocks until EOF)
+            // Read JSON from stdin (blocks until EOF).
+            // Supports two schemas:
+            //   Stop event:         {"hook_event_name":"Stop", "last_assistant_message":"..."}
+            //   Notification event: {"title":"...", "message":"..."}
             let stdinData = FileHandle.standardInput.readDataToEndOfFile()
             guard !stdinData.isEmpty else {
                 fputs("Error: No input on stdin. Pipe JSON with title/message fields.\n", stderr)
                 throw ExitCode(1)
             }
 
-            // Parse JSON — expects {"title": "...", "message": "..."}
             let subtitle: String?
             let message: String
             do {
@@ -51,8 +53,18 @@ extension Growlrrr.Hook {
                     fputs("Error: stdin must be a JSON object\n", stderr)
                     throw ExitCode(1)
                 }
-                subtitle = json["title"] as? String
-                message = (json["message"] as? String) ?? "Notification"
+
+                let eventName = json["hook_event_name"] as? String
+
+                if eventName == "Stop" {
+                    // Stop event — Claude finished responding
+                    subtitle = nil
+                    message = "Claude is ready"
+                } else {
+                    // Notification event or generic JSON
+                    subtitle = json["title"] as? String
+                    message = (json["message"] as? String) ?? "Notification"
+                }
             } catch let error as ExitCode {
                 throw error
             } catch {

@@ -235,7 +235,8 @@ grrr init --format claude-code
 
 Copy the output into your project's `.claude/settings.json` (or merge into an existing one). This configures two hooks:
 
-- **Notification** — runs `grrr hook notify`, which reads the notification JSON from stdin and sends a native notification with terminal reactivation
+- **Stop** — runs `grrr hook notify` when Claude finishes responding
+- **Notification** — runs `grrr hook notify` when Claude needs attention (permission prompts, idle checks, etc.)
 - **UserPromptSubmit** — runs `grrr hook dismiss`, which clears any outstanding notification for the current session
 
 The hooks communicate through a tracking file in `~/.growlrrr/.tracked/` keyed by `GROWLRRR_SESSION_ID`, so each terminal session's notifications are managed independently. The shell hooks from `grrr init` also check this directory, so returning to a regular shell prompt will dismiss Claude Code notifications too.
