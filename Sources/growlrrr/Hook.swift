@@ -23,8 +23,8 @@ extension Growlrrr.Hook {
             abstract: "Send a notification from JSON on stdin"
         )
 
-        @Option(name: .shortAndLong, help: "Notification title")
-        var title: String = "Growlrrr"
+        @Option(name: .shortAndLong, help: "Notification title (defaults to appId if set, otherwise 'Growlrrr')")
+        var title: String?
 
         @Option(name: .long, help: "Sound to play (default, none, or sound name)")
         var sound: String?
@@ -75,6 +75,9 @@ extension Growlrrr.Hook {
                 throw ExitCode(1)
             }
 
+            // Resolve title: explicit --title wins, then appId, then "Growlrrr"
+            let resolvedTitle = title ?? appId ?? "Growlrrr"
+
             // Derive notification identifier.
             // --replace uses a fixed identifier so new notifications replace the existing one.
             // Default uses a per-session identifier so each session gets its own notification.
@@ -94,7 +97,7 @@ extension Growlrrr.Hook {
                     throw ExitCode(1)
                 }
 
-                var args = ["send", "--title", title, "--identifier", identifier]
+                var args = ["send", "--title", resolvedTitle, "--identifier", identifier]
                 if let subtitle = subtitle {
                     args += ["--subtitle", subtitle]
                 }
@@ -121,7 +124,7 @@ extension Growlrrr.Hook {
 
             let config = NotificationConfig(
                 message: message,
-                title: title,
+                title: resolvedTitle,
                 subtitle: subtitle,
                 sound: SoundOption.from(sound),
                 imagePath: nil,
