@@ -604,25 +604,66 @@ extension Growlrrr {
             abstract: "Replay the action of the oldest delivered notification"
         )
 
+        @Flag(name: .shortAndLong, help: "Print diagnostic information")
+        var verbose: Bool = false
+
         func run() async throws {
             let service = NotificationService()
             let delivered = await service.listDeliveredDetails()
 
+            if verbose {
+                fputs("Delivered notifications: \(delivered.count)\n", stderr)
+                for (i, n) in delivered.enumerated() {
+                    fputs("  [\(i)] \(n.identifier) date=\(n.date) execute=\(n.execute != nil ? "yes" : "no") open=\(n.open != nil ? "yes" : "no")\n", stderr)
+                }
+            }
+
             guard let oldest = delivered.first else {
+                if verbose {
+                    fputs("No delivered notifications found — exiting\n", stderr)
+                }
                 return
+            }
+
+            if verbose {
+                fputs("Activating: \(oldest.identifier)\n", stderr)
             }
 
             // Run the embedded command (e.g. terminal reactivation script)
             if let command = oldest.execute {
+                if verbose {
+                    fputs("Execute command:\n\(command)\n", stderr)
+                }
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: "/bin/sh")
                 process.arguments = ["-c", command]
-                try? process.run()
-                process.waitUntilExit()
+                let errPipe = Pipe()
+                process.standardError = errPipe
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    if verbose {
+                        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                        let errStr = String(data: errData, encoding: .utf8) ?? ""
+                        fputs("Exit code: \(process.terminationStatus)\n", stderr)
+                        if !errStr.isEmpty {
+                            fputs("Stderr: \(errStr)\n", stderr)
+                        }
+                    }
+                } catch {
+                    fputs("Error launching command: \(error.localizedDescription)\n", stderr)
+                }
+            } else {
+                if verbose {
+                    fputs("No execute command stored in notification\n", stderr)
+                }
             }
 
             // Open URL if present
             if let urlString = oldest.open, let url = URL(string: urlString) {
+                if verbose {
+                    fputs("Opening URL: \(urlString)\n", stderr)
+                }
                 NSWorkspace.shared.open(url)
             }
 
