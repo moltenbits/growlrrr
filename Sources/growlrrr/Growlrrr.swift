@@ -535,7 +535,52 @@ extension Growlrrr {
         @Flag(name: .long, help: "Output as JSON")
         var json: Bool = false
 
+        @Flag(name: .long, help: "Include action details (execute, open, date) in JSON output")
+        var details: Bool = false
+
         func run() async throws {
+            // Details mode: output DeliveredNotificationDetail JSON (used by activate)
+            if details && json && !pending {
+                let service = NotificationService()
+                var allDetails = await service.listDeliveredDetails()
+                let currentAppName = CustomAppBundle.currentCustomAppName() ?? "growlrrr"
+                for i in allDetails.indices {
+                    allDetails[i].app = currentAppName
+                }
+
+                if !CustomAppBundle.isRunningFromCustomApp() {
+                    let customApps = CustomAppBundle.listCustomApps()
+                    for appName in customApps {
+                        do {
+                            let output = try CustomAppBundle.runAndCapture(
+                                appName: appName, arguments: ["list", "--json", "--details"])
+                            if let data = output.data(using: .utf8) {
+                                let decoder = JSONDecoder()
+                                decoder.dateDecodingStrategy = .secondsSince1970
+                                if var appDetails = try? decoder.decode(
+                                    [DeliveredNotificationDetail].self, from: data)
+                                {
+                                    for i in appDetails.indices {
+                                        appDetails[i].app = appName
+                                    }
+                                    allDetails.append(contentsOf: appDetails)
+                                }
+                            }
+                        } catch {
+                            // Skip apps that fail to respond
+                        }
+                    }
+                }
+
+                allDetails.sort { $0.date < $1.date }
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                encoder.dateEncodingStrategy = .secondsSince1970
+                let data = try encoder.encode(allDetails)
+                print(String(data: data, encoding: .utf8) ?? "[]")
+                return
+            }
+
             var allNotifications: [NotificationInfo] = []
 
             // Get notifications from current app
@@ -608,17 +653,59 @@ extension Growlrrr {
         var verbose: Bool = false
 
         func run() async throws {
+            // Gather delivered notifications from main app + all custom apps concurrently
             let service = NotificationService()
-            let delivered = await service.listDeliveredDetails()
+            let customApps = CustomAppBundle.isRunningFromCustomApp()
+                ? [] : CustomAppBundle.listCustomApps()
+
+            // Query main app and all custom apps in parallel
+            let allDelivered: [DeliveredNotificationDetail] = await withTaskGroup(
+                of: [DeliveredNotificationDetail].self
+            ) { group in
+                // Main app query
+                group.addTask {
+                    let currentAppName = CustomAppBundle.currentCustomAppName() ?? "growlrrr"
+                    var details = await service.listDeliveredDetails()
+                    for i in details.indices { details[i].app = currentAppName }
+                    return details
+                }
+
+                // Custom app queries (each in its own task)
+                for appName in customApps {
+                    group.addTask {
+                        do {
+                            let output = try CustomAppBundle.runAndCapture(
+                                appName: appName, arguments: ["list", "--json", "--details"])
+                            if let data = output.data(using: .utf8) {
+                                let decoder = JSONDecoder()
+                                decoder.dateDecodingStrategy = .secondsSince1970
+                                if var appDetails = try? decoder.decode(
+                                    [DeliveredNotificationDetail].self, from: data)
+                                {
+                                    for i in appDetails.indices { appDetails[i].app = appName }
+                                    return appDetails
+                                }
+                            }
+                        } catch {}
+                        return []
+                    }
+                }
+
+                var results: [DeliveredNotificationDetail] = []
+                for await batch in group {
+                    results.append(contentsOf: batch)
+                }
+                return results.sorted { $0.date < $1.date }
+            }
 
             if verbose {
-                fputs("Delivered notifications: \(delivered.count)\n", stderr)
-                for (i, n) in delivered.enumerated() {
-                    fputs("  [\(i)] \(n.identifier) date=\(n.date) execute=\(n.execute != nil ? "yes" : "no") open=\(n.open != nil ? "yes" : "no")\n", stderr)
+                fputs("Delivered notifications: \(allDelivered.count)\n", stderr)
+                for (i, n) in allDelivered.enumerated() {
+                    fputs("  [\(i)] [\(n.app ?? "?")] \(n.identifier) date=\(n.date) execute=\(n.execute != nil ? "yes" : "no") open=\(n.open != nil ? "yes" : "no")\n", stderr)
                 }
             }
 
-            guard let oldest = delivered.first else {
+            guard let oldest = allDelivered.first else {
                 if verbose {
                     fputs("No delivered notifications found — exiting\n", stderr)
                 }
@@ -626,7 +713,7 @@ extension Growlrrr {
             }
 
             if verbose {
-                fputs("Activating: \(oldest.identifier)\n", stderr)
+                fputs("Activating: [\(oldest.app ?? "?")] \(oldest.identifier)\n", stderr)
             }
 
             // Run the embedded command (e.g. terminal reactivation script)
@@ -667,8 +754,19 @@ extension Growlrrr {
                 NSWorkspace.shared.open(url)
             }
 
-            // Clear the notification
-            await service.clearDelivered(identifiers: [oldest.identifier])
+            // Clear the notification from the correct app bundle
+            let isCustomApp = oldest.app != nil && oldest.app != "growlrrr"
+            if isCustomApp, let appName = oldest.app {
+                // Fire and forget — don't wait for the subprocess
+                let clearProcess = Process()
+                clearProcess.executableURL = CustomAppBundle.executablePath(forAppName: appName)
+                clearProcess.arguments = ["clear", "--delivered", oldest.identifier]
+                clearProcess.standardOutput = FileHandle.nullDevice
+                clearProcess.standardError = FileHandle.nullDevice
+                try? clearProcess.run()
+            } else {
+                await service.clearDelivered(identifiers: [oldest.identifier])
+            }
 
             // Clean up tracking file if this is a hook notification
             if oldest.identifier.hasPrefix("growlrrr-hook-") {
@@ -676,11 +774,6 @@ extension Growlrrr {
                 let trackedFile = FileManager.default.homeDirectoryForCurrentUser
                     .appendingPathComponent(".growlrrr/.tracked/\(sessionId)")
                 try? FileManager.default.removeItem(at: trackedFile)
-            }
-
-            // RunLoop pass for notification system cleanup
-            await MainActor.run {
-                RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
             }
         }
     }

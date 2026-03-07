@@ -224,13 +224,6 @@ actor NotificationService {
         }
     }
 
-    struct DeliveredNotificationDetail {
-        let identifier: String
-        let date: Date
-        let execute: String?
-        let open: String?
-    }
-
     func listDeliveredDetails() async -> [DeliveredNotificationDetail] {
         let notifications = await center.deliveredNotifications()
         return notifications

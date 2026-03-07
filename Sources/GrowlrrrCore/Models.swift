@@ -82,6 +82,24 @@ public struct NotificationInfo: Codable {
     }
 }
 
+// MARK: - Delivered Notification Detail (for activate)
+
+public struct DeliveredNotificationDetail: Codable {
+    public let identifier: String
+    public let date: Date
+    public let execute: String?
+    public let open: String?
+    public var app: String?
+
+    public init(identifier: String, date: Date, execute: String?, open: String?, app: String? = nil) {
+        self.identifier = identifier
+        self.date = date
+        self.execute = execute
+        self.open = open
+        self.app = app
+    }
+}
+
 // MARK: - Errors
 
 public enum GrowlrrrError: Error, LocalizedError, CustomStringConvertible {
