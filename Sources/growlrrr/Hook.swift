@@ -90,6 +90,17 @@ extension Growlrrr.Hook {
                 executeCommand = ReactivateScript.generate()
             }
 
+            // Track the notification so dismiss can clear it later.
+            // Must happen before runNotification which calls exit().
+            // Format: "notificationId\nappName" (appName omitted for main app)
+            let trackedDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".growlrrr")
+                .appendingPathComponent(".tracked")
+            try? FileManager.default.createDirectory(at: trackedDir, withIntermediateDirectories: true)
+            let trackedFile = trackedDir.appendingPathComponent(sessionId)
+            let trackingData = appId != nil ? "\(identifier)\n\(appId!)" : identifier
+            try? trackingData.write(to: trackedFile, atomically: true, encoding: .utf8)
+
             // Handle custom app
             if let appId = appId {
                 guard CustomAppBundle.bundleExists(forAppName: appId) else {
@@ -157,13 +168,6 @@ extension Growlrrr.Hook {
                 RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
             }
 
-            // Track the notification so dismiss can clear it later
-            let trackedDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".growlrrr")
-                .appendingPathComponent(".tracked")
-            try? FileManager.default.createDirectory(at: trackedDir, withIntermediateDirectories: true)
-            let trackedFile = trackedDir.appendingPathComponent(sessionId)
-            try? notificationId.write(to: trackedFile, atomically: true, encoding: .utf8)
         }
     }
 }
@@ -177,6 +181,9 @@ extension Growlrrr.Hook {
             abstract: "Clear the tracked notification for the current session"
         )
 
+        @Option(name: .customLong("appId"), help: "Custom app hint (overridden by tracking file if present)")
+        var appId: String?
+
         func run() async throws {
             let sessionId = ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"] ?? "default"
             let trackedFile = FileManager.default.homeDirectoryForCurrentUser
@@ -189,22 +196,37 @@ extension Growlrrr.Hook {
                 return
             }
 
-            guard let notificationId = try? String(contentsOf: trackedFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
-                  !notificationId.isEmpty else {
+            guard let contents = try? String(contentsOf: trackedFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+                  !contents.isEmpty else {
                 try? FileManager.default.removeItem(at: trackedFile)
                 return
             }
 
+            // Parse tracking data: "notificationId\nappName" or just "notificationId"
+            let lines = contents.split(separator: "\n", maxSplits: 1)
+            let notificationId = String(lines[0])
+            let appName = (lines.count > 1 ? String(lines[1]) : nil) ?? appId
+
             // Remove the tracking file first
             try? FileManager.default.removeItem(at: trackedFile)
 
-            // Clear the notification and give the system a RunLoop cycle
-            // to process the removal before the process exits
-            let service = NotificationService()
-            await service.clearPending(identifiers: [notificationId])
-            await service.clearDelivered(identifiers: [notificationId])
-            await MainActor.run {
-                RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+            if let appName = appName {
+                // Clear from custom app bundle
+                let clearProcess = Process()
+                clearProcess.executableURL = CustomAppBundle.executablePath(forAppName: appName)
+                clearProcess.arguments = ["clear", "--delivered", notificationId]
+                clearProcess.standardOutput = FileHandle.nullDevice
+                clearProcess.standardError = FileHandle.nullDevice
+                try? clearProcess.run()
+                clearProcess.waitUntilExit()
+            } else {
+                // Clear from main app
+                let service = NotificationService()
+                await service.clearPending(identifiers: [notificationId])
+                await service.clearDelivered(identifiers: [notificationId])
+                await MainActor.run {
+                    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+                }
             }
         }
     }
