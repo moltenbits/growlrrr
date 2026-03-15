@@ -1,6 +1,13 @@
 import Foundation
 
 enum ReactivateScript {
+    // Map TERM_PROGRAM values to macOS app names for simple activation
+    private static let termProgramAppNames: [String: String] = [
+        "WarpTerminal": "Warp",
+        "Alacritty": "Alacritty",
+        "kitty": "kitty",
+    ]
+
     static func generate() -> String? {
         let termProgram = ProcessInfo.processInfo.environment["TERM_PROGRAM"]
 
@@ -9,16 +16,21 @@ enum ReactivateScript {
             return generateITermReactivateScript()
         case "Apple_Terminal":
             return generateTerminalReactivateScript()
-        case "WarpTerminal":
-            return "osascript -e 'tell application \"Warp\" to activate'"
-        case "Alacritty":
-            return "osascript -e 'tell application \"Alacritty\" to activate'"
-        case "kitty":
-            return "osascript -e 'tell application \"kitty\" to activate'"
+        case "ghostty":
+            return generateGhosttyReactivateScript()
         default:
-            // Try to detect from parent process or fall back to generic activation
+            // Check known terminals that only need simple activation
+            if let termProgram = termProgram,
+               let appName = termProgramAppNames[termProgram] {
+                return "osascript -e 'tell application \"\(appName)\" to activate'"
+            }
+            // Try to detect from parent process
             if let bundleId = detectTerminalBundleId() {
                 return "osascript -e 'tell application id \"\(bundleId)\" to activate'"
+            }
+            // Last resort: use TERM_PROGRAM as the app name
+            if let termProgram = termProgram, !termProgram.isEmpty {
+                return "osascript -e 'tell application \"\(termProgram)\" to activate'"
             }
             return nil
         }
@@ -114,6 +126,53 @@ enum ReactivateScript {
             """
     }
 
+    private static func generateGhosttyReactivateScript() -> String? {
+        // Capture the focused terminal's UUID via AppleScript
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.arguments = ["-e", """
+            tell application "Ghostty"
+                set term to focused terminal of selected tab of front window
+                return id of term
+            end tell
+            """]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let terminalId = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !terminalId.isEmpty else {
+                return "osascript -e 'tell application \"Ghostty\" to activate'"
+            }
+
+            return """
+                osascript <<'APPLESCRIPT'
+                tell application "Ghostty"
+                    activate
+                    repeat with w in windows
+                        repeat with t in tabs of w
+                            repeat with term in terminals of t
+                                if id of term is "\(terminalId)" then
+                                    focus term
+                                    return
+                                end if
+                            end repeat
+                        end repeat
+                    end repeat
+                end tell
+                APPLESCRIPT
+                """
+        } catch {
+            return "osascript -e 'tell application \"Ghostty\" to activate'"
+        }
+    }
+
     private static func generateTerminalReactivateScript() -> String? {
         // Capture the current Terminal.app window and tab
         let task = Process()
@@ -198,6 +257,8 @@ enum ReactivateScript {
                         return "org.alacritty"
                     case "kitty":
                         return "net.kovidgoyal.kitty"
+                    case "ghostty":
+                        return "com.mitchellh.ghostty"
                     default:
                         break
                     }
