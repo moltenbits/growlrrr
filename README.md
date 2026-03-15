@@ -83,9 +83,8 @@ grrr --execute "open -a Safari" "Click to open browser"
 grrr --execute "./scripts/deploy.sh" "Ready to deploy - click to start"
 
 # Reactivate the originating terminal when clicked
-# For iTerm2 and Terminal.app, reactivates the specific window/tab
-# For other terminals (Warp, Alacritty, kitty), activates the app
-# (Window-level control requires AppleScript support, which most terminals lack)
+# For iTerm2, Terminal.app, and Ghostty: reactivates the specific window/tab
+# For other terminals (Warp, Alacritty, kitty): activates the app
 grrr --reactivate "Task complete - click to return"
 
 # Chain commands
@@ -239,7 +238,7 @@ Copy the output into your project's `.claude/settings.json` (or merge into an ex
 - **Notification** — runs `grrr hook notify` when Claude needs attention (permission prompts, idle checks, etc.)
 - **UserPromptSubmit** — runs `grrr hook dismiss`, which clears any outstanding notification for the current session
 
-The hooks communicate through a tracking file in `~/.growlrrr/.tracked/` keyed by `GROWLRRR_SESSION_ID`, so each terminal session's notifications are managed independently. The shell hooks from `grrr init` also check this directory, so returning to a regular shell prompt will dismiss Claude Code notifications too.
+The notification identifiers are derived from `--appId` (or `GROWLRRR_SESSION_ID`), so each terminal session's notifications are managed independently. The shell hooks from `grrr init` will also dismiss Claude Code notifications when you return to a regular shell prompt.
 
 #### Hook Options
 
@@ -306,7 +305,7 @@ cmd + shift - n : /usr/local/bin/grrr activate
 | `--category` | Category identifier for actionable notifications |
 | `--wait` | Wait for user interaction before exiting |
 | `--printId` | Output notification identifier to stdout |
-| `--reactivate` | Reactivate the originating terminal when clicked. For iTerm2/Terminal.app, focuses the specific window/tab. For others, activates the app. |
+| `--reactivate` | Reactivate the originating terminal when clicked. For iTerm2, Terminal.app, and Ghostty, focuses the specific window/tab. For others, activates the app. |
 
 ### Apps Subcommands
 
@@ -340,7 +339,36 @@ ln -s /Applications/growlrrr.app/Contents/Resources/completions/growlrrr.fish ~/
 ## Requirements
 
 - macOS 13.0 (Ventura) or later
-- Notification permissions (prompted on first run)
+
+## Permissions
+
+growlrrr requires certain macOS permissions depending on which features you use. Each is prompted automatically on first use.
+
+### Notifications
+
+**Required for:** All notification functionality (core feature)
+
+The first time growlrrr sends a notification, macOS will prompt you to allow notifications. You can also request permission explicitly with `grrr authorize`.
+
+**Manage in:** System Settings > Notifications > growlrrr (and any custom apps created with `grrr apps add`)
+
+Each custom app appears as a separate entry, so you can configure notification style (banners vs alerts), sounds, and grouping independently.
+
+### Automation (Apple Events)
+
+**Required for:** `--reactivate` with terminals that support AppleScript (iTerm2, Terminal.app, Ghostty)
+
+When a notification with `--reactivate` is clicked, growlrrr uses AppleScript to focus the specific terminal window/tab. macOS requires explicit permission for one app to send Apple Events to another. You'll see a prompt like:
+
+> "growlrrr.app" wants access to control "Ghostty.app". Allowing control will provide access to documents and data in "Ghostty.app", and to perform actions within that app.
+
+This is a one-time prompt per terminal app per growlrrr app identity. If you use custom apps (`--appId`), each one will prompt separately since they are distinct app bundles. Click **OK** to allow.
+
+**Manage in:** System Settings > Privacy & Security > Automation > growlrrr
+
+Without this permission, `--reactivate` can only bring the terminal app to the foreground (activating whichever window was most recently focused). With it, growlrrr can target the exact window and tab that triggered the notification. If you deny the prompt, you can grant it later in the settings above.
+
+> **Note:** Terminals without AppleScript support (Warp, Alacritty, kitty) only use simple app activation and do not trigger this permission prompt.
 
 ## How It Works
 
