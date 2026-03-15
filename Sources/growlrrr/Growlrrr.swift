@@ -768,13 +768,6 @@ extension Growlrrr {
                 await service.clearDelivered(identifiers: [oldest.identifier])
             }
 
-            // Clean up tracking file if this is a hook notification
-            if oldest.identifier.hasPrefix("growlrrr-hook-") {
-                let sessionId = String(oldest.identifier.dropFirst("growlrrr-hook-".count))
-                let trackedFile = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent(".growlrrr/.tracked/\(sessionId)")
-                try? FileManager.default.removeItem(at: trackedFile)
-            }
         }
     }
 }
@@ -897,7 +890,6 @@ extension Growlrrr {
             : "${GROWLRRR_AUTOCLEAR:=1}"
             : "${GROWLRRR_SESSION_ID:=$$}"
             export GROWLRRR_SESSION_ID
-            mkdir -p ~/.growlrrr/.tracked 2>/dev/null
 
             _growlrrr_base_cmd() {
                 local cmd="$1"
@@ -944,13 +936,8 @@ extension Growlrrr {
                         ( grrr clear "$_growlrrr_notif_id" &>/dev/null & )
                         unset _growlrrr_notif_id
                     fi
-                    # Also clear file-tracked notifications (e.g. from Claude Code hooks)
-                    if [[ -f ~/.growlrrr/.tracked/"$GROWLRRR_SESSION_ID" ]]; then
-                        local _tracked_id
-                        _tracked_id=$(<~/.growlrrr/.tracked/"$GROWLRRR_SESSION_ID")
-                        rm -f ~/.growlrrr/.tracked/"$GROWLRRR_SESSION_ID"
-                        [[ -n "$_tracked_id" ]] && ( grrr clear "$_tracked_id" &>/dev/null & )
-                    fi
+                    # Also clear any Claude Code hook notification for this session
+                    ( grrr clear "growlrrr-hook-$GROWLRRR_SESSION_ID" "growlrrr-hook" &>/dev/null & )
                 fi
 
                 [[ -z "$_growlrrr_start" ]] && return
@@ -1024,7 +1011,6 @@ extension Growlrrr {
             : "${GROWLRRR_AUTOCLEAR:=1}"
             : "${GROWLRRR_SESSION_ID:=$$}"
             export GROWLRRR_SESSION_ID
-            mkdir -p ~/.growlrrr/.tracked 2>/dev/null
 
             _growlrrr_base_cmd() {
                 local cmd="$1"
@@ -1077,13 +1063,8 @@ extension Growlrrr {
                         ( grrr clear "$_growlrrr_notif_id" &>/dev/null & )
                         unset _growlrrr_notif_id
                     fi
-                    # Also clear file-tracked notifications (e.g. from Claude Code hooks)
-                    if [[ -f ~/.growlrrr/.tracked/"$GROWLRRR_SESSION_ID" ]]; then
-                        local _tracked_id
-                        _tracked_id=$(cat ~/.growlrrr/.tracked/"$GROWLRRR_SESSION_ID")
-                        rm -f ~/.growlrrr/.tracked/"$GROWLRRR_SESSION_ID"
-                        [[ -n "$_tracked_id" ]] && ( grrr clear "$_tracked_id" &>/dev/null & )
-                    fi
+                    # Also clear any Claude Code hook notification for this session
+                    ( grrr clear "growlrrr-hook-$GROWLRRR_SESSION_ID" "growlrrr-hook" &>/dev/null & )
                 fi
 
                 [[ -z "$_growlrrr_start" ]] && return

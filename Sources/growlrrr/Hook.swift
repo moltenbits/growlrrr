@@ -78,10 +78,10 @@ extension Growlrrr.Hook {
             // Resolve title: explicit --title wins, then appId, then "Growlrrr"
             let resolvedTitle = title ?? appId ?? "Growlrrr"
 
-            // Derive notification identifier.
-            // --replace uses a fixed identifier so new notifications replace the existing one.
-            // Default uses a per-session identifier so each session gets its own notification.
-            let sessionId = ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"] ?? "default"
+            // Derive session ID: env var > appId > "default".
+            // Using appId ensures each custom app gets its own tracking file,
+            // preventing cross-session dismiss conflicts between Claude Code instances.
+            let sessionId = ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"] ?? appId ?? "default"
             let identifier = replace ? "growlrrr-hook" : "growlrrr-hook-\(sessionId)"
 
             // Build reactivate script
@@ -89,17 +89,6 @@ extension Growlrrr.Hook {
             if reactivate {
                 executeCommand = ReactivateScript.generate()
             }
-
-            // Track the notification so dismiss can clear it later.
-            // Must happen before runNotification which calls exit().
-            // Format: "notificationId\nappName" (appName omitted for main app)
-            let trackedDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".growlrrr")
-                .appendingPathComponent(".tracked")
-            try? FileManager.default.createDirectory(at: trackedDir, withIntermediateDirectories: true)
-            let trackedFile = trackedDir.appendingPathComponent(sessionId)
-            let trackingData = appId != nil ? "\(identifier)\n\(appId!)" : identifier
-            try? trackingData.write(to: trackedFile, atomically: true, encoding: .utf8)
 
             // Handle custom app
             if let appId = appId {
@@ -178,43 +167,27 @@ extension Growlrrr.Hook {
     struct Dismiss: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "dismiss",
-            abstract: "Clear the tracked notification for the current session"
+            abstract: "Clear the notification for the current session"
         )
 
-        @Option(name: .customLong("appId"), help: "Custom app hint (overridden by tracking file if present)")
+        @Option(name: .customLong("appId"), help: "Custom app to clear from")
         var appId: String?
 
         func run() async throws {
-            let sessionId = ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"] ?? "default"
-            let trackedFile = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".growlrrr")
-                .appendingPathComponent(".tracked")
-                .appendingPathComponent(sessionId)
+            let sessionId = ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"] ?? appId ?? "default"
 
-            guard FileManager.default.fileExists(atPath: trackedFile.path) else {
-                // Nothing tracked — exit silently
-                return
-            }
+            // Derive the notification identifiers — clear both possible formats
+            // in case --replace was used on the notify side
+            let identifiers = [
+                "growlrrr-hook-\(sessionId)",
+                "growlrrr-hook",
+            ]
 
-            guard let contents = try? String(contentsOf: trackedFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
-                  !contents.isEmpty else {
-                try? FileManager.default.removeItem(at: trackedFile)
-                return
-            }
-
-            // Parse tracking data: "notificationId\nappName" or just "notificationId"
-            let lines = contents.split(separator: "\n", maxSplits: 1)
-            let notificationId = String(lines[0])
-            let appName = (lines.count > 1 ? String(lines[1]) : nil) ?? appId
-
-            // Remove the tracking file first
-            try? FileManager.default.removeItem(at: trackedFile)
-
-            if let appName = appName {
+            if let appId = appId {
                 // Clear from custom app bundle
                 let clearProcess = Process()
-                clearProcess.executableURL = CustomAppBundle.executablePath(forAppName: appName)
-                clearProcess.arguments = ["clear", "--delivered", notificationId]
+                clearProcess.executableURL = CustomAppBundle.executablePath(forAppName: appId)
+                clearProcess.arguments = ["clear", "--delivered"] + identifiers
                 clearProcess.standardOutput = FileHandle.nullDevice
                 clearProcess.standardError = FileHandle.nullDevice
                 try? clearProcess.run()
@@ -222,8 +195,7 @@ extension Growlrrr.Hook {
             } else {
                 // Clear from main app
                 let service = NotificationService()
-                await service.clearPending(identifiers: [notificationId])
-                await service.clearDelivered(identifiers: [notificationId])
+                await service.clearDelivered(identifiers: identifiers)
                 await MainActor.run {
                     RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
                 }
