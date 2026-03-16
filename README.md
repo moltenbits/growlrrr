@@ -87,6 +87,15 @@ grrr --execute "./scripts/deploy.sh" "Ready to deploy - click to start"
 # For other terminals (Warp, Alacritty, kitty): activates the app
 grrr --reactivate "Task complete - click to return"
 
+# Terminal reactivation details:
+#   iTerm2:      Uses ITERM_SESSION_ID env var — always targets the correct session
+#   Terminal.app: Captures window/tab ID at send time via AppleScript
+#   Ghostty:     Captures terminal UUID at send time via AppleScript — if you switch
+#                Ghostty tabs between starting a command and the notification firing,
+#                the wrong tab may be targeted. Ghostty does not yet provide a session
+#                ID environment variable (see https://github.com/ghostty-org/ghostty/discussions/10603)
+#   Others:      Simple app activation (brings app to foreground, no tab targeting)
+
 # Chain commands
 grrr --execute "cd ~/project && make test" "Click to run tests"
 
