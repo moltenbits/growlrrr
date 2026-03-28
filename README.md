@@ -128,9 +128,18 @@ This is useful for:
 # Create a custom app with an icon
 grrr apps add --appId MyCIBot --appIcon ./ci-icon.png
 
+# Or create one from an installed macOS app's icon and name.
+# The app name is derived from the bundle (e.g., "Xcode", "Code"),
+# and can be referenced with --appId afterward.
+grrr apps add --bundleID com.apple.dt.Xcode    # creates "Xcode", use --appId Xcode
+grrr apps add --bundleID com.microsoft.VSCode   # creates "Code", use --appId Code
+
+# Override the derived name while using the app's icon
+grrr apps add --bundleID com.apple.dt.Xcode --appId MyXcode
+
 # Send notifications using the custom app
 grrr --appId MyCIBot --title "Build" "Passed!"
-grrr --appId MyCIBot --title "Build" "Failed!"
+grrr --appId Xcode --title "Build" "Failed!"
 
 # Create another custom app with a different icon
 grrr apps add --appId DeployBot --appIcon ./deploy-icon.png
@@ -321,6 +330,7 @@ cmd + shift - n : /usr/local/bin/grrr activate
 | Command | Description |
 |---------|-------------|
 | `grrr apps add --appId NAME --appIcon PATH` | Create or update a custom app |
+| `grrr apps add --bundleID BUNDLE_ID` | Create a custom app from an installed macOS app |
 | `grrr apps list [--json]` | List custom apps |
 | `grrr apps remove NAME [--force]` | Remove a custom app |
 | `grrr apps update` | Update all custom apps after upgrading growlrrr |

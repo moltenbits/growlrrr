@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 public enum CustomAppBundle {
@@ -247,6 +248,82 @@ public enum CustomAppBundle {
         process.waitUntilExit()
 
         exit(process.terminationStatus)
+    }
+
+    // MARK: - Bundle ID Resolution
+
+    /// Information resolved from a macOS application bundle ID
+    public struct ResolvedApp {
+        public let name: String
+        public let iconPath: String
+    }
+
+    /// Resolve a macOS bundle identifier to an app name and a temporary PNG icon path.
+    public static func resolveSystemApp(bundleIdentifier: String) throws -> ResolvedApp {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+            throw GrowlrrrError.notificationFailed(
+                "No application found for bundle ID '\(bundleIdentifier)'"
+            )
+        }
+
+        guard let bundle = Bundle(url: appURL) else {
+            throw GrowlrrrError.notificationFailed(
+                "Could not read bundle at \(appURL.path)"
+            )
+        }
+
+        let name = bundle.infoDictionary?["CFBundleDisplayName"] as? String
+            ?? bundle.infoDictionary?["CFBundleName"] as? String
+            ?? appURL.deletingPathExtension().lastPathComponent
+
+        // Find the .icns file and extract the largest PNG representation via iconutil.
+        let iconFileName = bundle.infoDictionary?["CFBundleIconFile"] as? String ?? "AppIcon"
+        let icnsName = iconFileName.hasSuffix(".icns") ? iconFileName : "\(iconFileName).icns"
+        let icnsPath = appURL
+            .appendingPathComponent("Contents")
+            .appendingPathComponent("Resources")
+            .appendingPathComponent(icnsName)
+
+        guard FileManager.default.fileExists(atPath: icnsPath.path) else {
+            throw GrowlrrrError.notificationFailed(
+                "Could not find icon for '\(name)' at \(icnsPath.path)"
+            )
+        }
+
+        // Explode the .icns into individual PNGs via iconutil
+        let tempIconset = FileManager.default.temporaryDirectory
+            .appendingPathComponent("growlrrr-\(UUID().uuidString).iconset")
+
+        let iconutil = Process()
+        iconutil.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
+        iconutil.arguments = ["-c", "iconset", icnsPath.path, "-o", tempIconset.path]
+        iconutil.standardOutput = FileHandle.nullDevice
+        iconutil.standardError = FileHandle.nullDevice
+        try iconutil.run()
+        iconutil.waitUntilExit()
+
+        guard iconutil.terminationStatus == 0 else {
+            throw GrowlrrrError.notificationFailed("Failed to extract icon from '\(name)'")
+        }
+
+        defer { try? FileManager.default.removeItem(at: tempIconset) }
+
+        // Pick the largest PNG — icon_512x512@2x.png (1024x1024) preferred
+        let preferred = ["icon_512x512@2x.png", "icon_512x512.png", "icon_256x256@2x.png", "icon_256x256.png"]
+        let pngs = try FileManager.default.contentsOfDirectory(atPath: tempIconset.path)
+
+        guard let bestMatch = preferred.first(where: { pngs.contains($0) }) ?? pngs.first(where: { $0.hasSuffix(".png") }) else {
+            throw GrowlrrrError.notificationFailed("No icon representations found for '\(name)'")
+        }
+
+        let tempPng = FileManager.default.temporaryDirectory
+            .appendingPathComponent("growlrrr-\(UUID().uuidString).png")
+        try FileManager.default.copyItem(
+            atPath: tempIconset.appendingPathComponent(bestMatch).path,
+            toPath: tempPng.path
+        )
+
+        return ResolvedApp(name: name, iconPath: tempPng.path)
     }
 
     // MARK: - Private Helpers

@@ -133,31 +133,55 @@ extension Growlrrr {
         )
 
         @Option(name: .customLong("appId"), help: "App identifier (e.g., 'MyCIBot')")
-        var appId: String
+        var appId: String?
 
         @Option(name: .customLong("appIcon"), help: "Path to the app icon image")
-        var appIcon: String
+        var appIcon: String?
+
+        @Option(name: .customLong("bundleID"), help: "macOS bundle ID to copy name and icon from (e.g., 'com.apple.dt.Xcode')")
+        var bundleID: String?
 
         func run() throws {
+            // Resolve the app name and icon path
+            let resolvedName: String
+            let resolvedIcon: String
+
+            if let bundleID = bundleID {
+                let resolved = try CustomAppBundle.resolveSystemApp(bundleIdentifier: bundleID)
+                resolvedName = appId ?? resolved.name
+                resolvedIcon = appIcon ?? resolved.iconPath
+            } else {
+                guard let name = appId else {
+                    fputs("Error: --appId is required when --bundleID is not provided\n", stderr)
+                    throw ExitCode(1)
+                }
+                guard let icon = appIcon else {
+                    fputs("Error: --appIcon is required when --bundleID is not provided\n", stderr)
+                    throw ExitCode(1)
+                }
+                resolvedName = name
+                resolvedIcon = icon
+            }
+
             // Validate app ID
             let validNameRegex = try! NSRegularExpression(pattern: "^[a-zA-Z][a-zA-Z0-9_-]*$")
-            let nameRange = NSRange(appId.startIndex..., in: appId)
-            guard validNameRegex.firstMatch(in: appId, range: nameRange) != nil else {
+            let nameRange = NSRange(resolvedName.startIndex..., in: resolvedName)
+            guard validNameRegex.firstMatch(in: resolvedName, range: nameRange) != nil else {
                 fputs("Error: --appId must start with a letter and contain only letters, numbers, hyphens, or underscores\n", stderr)
                 throw ExitCode(1)
             }
 
-            guard FileManager.default.fileExists(atPath: appIcon) else {
-                fputs("Error: Icon file not found: \(appIcon)\n", stderr)
+            guard FileManager.default.fileExists(atPath: resolvedIcon) else {
+                fputs("Error: Icon file not found: \(resolvedIcon)\n", stderr)
                 throw ExitCode(1)
             }
 
             // Create or update the custom app bundle
             do {
-                _ = try CustomAppBundle.ensureBundle(appName: appId, iconPath: appIcon)
-                print("Created custom app '\(appId)'")
-                print("Bundle: \(CustomAppBundle.bundlePath(forAppName: appId).path)")
-                print("\nUse it with: growlrrr --appId \(appId) \"Your message\"")
+                _ = try CustomAppBundle.ensureBundle(appName: resolvedName, iconPath: resolvedIcon)
+                print("Created custom app '\(resolvedName)'")
+                print("Bundle: \(CustomAppBundle.bundlePath(forAppName: resolvedName).path)")
+                print("\nUse it with: growlrrr --appId \(resolvedName) \"Your message\"")
             } catch {
                 fputs("Error creating custom app: \(error.localizedDescription)\n", stderr)
                 throw ExitCode(1)
