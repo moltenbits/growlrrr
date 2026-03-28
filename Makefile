@@ -84,3 +84,13 @@ format: ## Format code (requires swift-format)
 
 lint: ## Lint code (requires swift-format)
 	swift-format lint -r Sources/
+
+flush-icon-cache: ## Flush macOS icon caches and restart related services
+	@echo "Flushing icon caches..."
+	@find /var/folders -maxdepth 5 -name "com.apple.iconservicesagent" -path "*/C/*" -exec rm -rf {} + 2>/dev/null || true
+	@find /var/folders -maxdepth 5 -name "com.apple.iconservices" -path "*/C/*" -exec rm -rf {} + 2>/dev/null || true
+	@find /var/folders -maxdepth 5 -name "com.apple.dock.iconcache" -exec rm -rf {} + 2>/dev/null || true
+	@killall Dock 2>/dev/null || true
+	@killall usernoted 2>/dev/null || true
+	@killall NotificationCenter 2>/dev/null || true
+	@echo "Done. Icon caches flushed and services restarted."
