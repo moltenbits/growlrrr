@@ -9,10 +9,26 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/.build"
 RESOURCES_DIR="$PROJECT_DIR/Sources/growlrrr/Resources"
 
+# Load .env (not committed) for signing config: TEAM_NAME, TEAM_ID
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$PROJECT_DIR/.env"
+    set +a
+fi
+
 # Configuration
 APP_NAME="growlrrr"
 BUNDLE_ID="com.moltenbits.growlrrr"
 BUILD_CONFIG="${1:-release}"
+
+# Construct the Developer ID Application signing identity from .env values.
+# When TEAM_NAME and TEAM_ID are both set, we sign for distribution
+# (hardened runtime + timestamp). Otherwise we fall back to ad-hoc signing.
+SIGN_IDENTITY=""
+if [[ -n "${TEAM_NAME:-}" && -n "${TEAM_ID:-}" ]]; then
+    SIGN_IDENTITY="Developer ID Application: $TEAM_NAME ($TEAM_ID)"
+fi
 
 echo "Building $APP_NAME ($BUILD_CONFIG)..."
 
@@ -53,9 +69,23 @@ mkdir -p "$COMPLETIONS_DIR"
 # Create PkgInfo
 echo -n "APPL????" > "$CONTENTS_DIR/PkgInfo"
 
-# Sign the app (ad-hoc signing for local use)
-echo "Signing app bundle..."
-codesign --force --deep --sign - "$APP_BUNDLE" 2>/dev/null || true
+# Sign the app
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    echo "Signing app bundle with: $SIGN_IDENTITY"
+    # --options runtime: enable hardened runtime (required for notarization)
+    # --timestamp: include a secure timestamp (required for notarization)
+    codesign --force --deep \
+        --options runtime \
+        --timestamp \
+        --sign "$SIGN_IDENTITY" \
+        "$APP_BUNDLE"
+
+    # Verify the signature
+    codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+else
+    echo "Signing app bundle (ad-hoc, local use only)..."
+    codesign --force --deep --sign - "$APP_BUNDLE" 2>/dev/null || true
+fi
 
 echo "App bundle created: $APP_BUNDLE"
 

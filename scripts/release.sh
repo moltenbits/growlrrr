@@ -19,17 +19,45 @@ fi
 
 echo "Building growlrrr v$VERSION for release..."
 
-# Build release bundle
+# Build release bundle (signs with Developer ID if TEAM_NAME/TEAM_ID env vars set)
 "$SCRIPT_DIR/bundle.sh" release
+
+APP_BUNDLE="$BUILD_DIR/release/growlrrr.app"
+
+# Notarize if credentials are available, otherwise skip (e.g. for source builds).
+if [[ -n "${TEAM_ID:-}" && -n "${APPLE_ID:-}" && -n "${APPLE_ID_PASSWORD:-}" ]]; then
+    echo ""
+    echo "Notarizing app bundle..."
+    ZIP_FOR_NOTARY="$BUILD_DIR/release/growlrrr-notary.zip"
+
+    codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+
+    rm -f "$ZIP_FOR_NOTARY"
+    ditto -c -k --keepParent "$APP_BUNDLE" "$ZIP_FOR_NOTARY"
+
+    xcrun notarytool submit "$ZIP_FOR_NOTARY" \
+        --apple-id "$APPLE_ID" \
+        --password "$APPLE_ID_PASSWORD" \
+        --team-id "$TEAM_ID" \
+        --wait
+
+    xcrun stapler staple "$APP_BUNDLE"
+    xcrun stapler validate "$APP_BUNDLE"
+
+    rm -f "$ZIP_FOR_NOTARY"
+    echo "Notarization complete."
+else
+    echo "Skipping notarization (APPLE_ID / APPLE_ID_PASSWORD / TEAM_ID not set)."
+fi
 
 # Create dist directory
 mkdir -p "$DIST_DIR"
 
 # Create archive
-APP_BUNDLE="$BUILD_DIR/release/growlrrr.app"
 ARCHIVE_NAME="growlrrr-${VERSION}-macos.tar.gz"
 ARCHIVE_PATH="$DIST_DIR/$ARCHIVE_NAME"
 
+echo ""
 echo "Creating archive: $ARCHIVE_NAME"
 
 # Create tarball from the release directory
