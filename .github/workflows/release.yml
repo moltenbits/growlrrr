@@ -53,7 +53,7 @@ jobs:
           TEAM_NAME: ${{ secrets.TEAM_NAME }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           chmod +x scripts/*.sh
           ./scripts/release.sh ${{ steps.version.outputs.version }}

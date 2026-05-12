@@ -25,7 +25,7 @@ echo "Building growlrrr v$VERSION for release..."
 APP_BUNDLE="$BUILD_DIR/release/growlrrr.app"
 
 # Notarize if credentials are available, otherwise skip (e.g. for source builds).
-if [[ -n "${TEAM_ID:-}" && -n "${APPLE_ID:-}" && -n "${APPLE_ID_PASSWORD:-}" ]]; then
+if [[ -n "${TEAM_ID:-}" && -n "${APPLE_ID:-}" && -n "${APPLE_APP_PASSWORD:-}" ]]; then
     echo ""
     echo "Notarizing app bundle..."
     ZIP_FOR_NOTARY="$BUILD_DIR/release/growlrrr-notary.zip"
@@ -37,7 +37,7 @@ if [[ -n "${TEAM_ID:-}" && -n "${APPLE_ID:-}" && -n "${APPLE_ID_PASSWORD:-}" ]];
 
     xcrun notarytool submit "$ZIP_FOR_NOTARY" \
         --apple-id "$APPLE_ID" \
-        --password "$APPLE_ID_PASSWORD" \
+        --password "$APPLE_APP_PASSWORD" \
         --team-id "$TEAM_ID" \
         --wait
 
@@ -47,7 +47,7 @@ if [[ -n "${TEAM_ID:-}" && -n "${APPLE_ID:-}" && -n "${APPLE_ID_PASSWORD:-}" ]];
     rm -f "$ZIP_FOR_NOTARY"
     echo "Notarization complete."
 else
-    echo "Skipping notarization (APPLE_ID / APPLE_ID_PASSWORD / TEAM_ID not set)."
+    echo "Skipping notarization (APPLE_ID / APPLE_APP_PASSWORD / TEAM_ID not set)."
 fi
 
 # Create dist directory

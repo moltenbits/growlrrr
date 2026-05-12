@@ -100,12 +100,27 @@ The release workflow (`.github/workflows/release.yml`) signs and notarizes on ev
 
 ### 1. Export the certificate
 
-In **Keychain Access**, find `Developer ID Application: <Team Name> (<TEAM_ID>)`, right-click → **Export**, save as a `.p12` with a strong password.
+Run the following from the project root. It generates a strong export password, exports your code-signing identity from the login keychain as a `.p12`, and copies the base64-encoded contents to your clipboard ready to paste into a GitHub secret.
 
-Base64-encode it (no line breaks):
 ```bash
-base64 -i ~/Desktop/cert.p12 | pbcopy
+P12_PASS=$(openssl rand -base64 24)
+echo "P12_PASSWORD (save this for the GitHub secret):"
+echo "$P12_PASS"
+
+security export \
+  -k ~/Library/Keychains/login.keychain-db \
+  -t identities \
+  -f pkcs12 \
+  -P "$P12_PASS" \
+  -o ~/Desktop/growlrrr-cert.p12
+
+base64 -i ~/Desktop/growlrrr-cert.p12 | pbcopy
+echo "BUILD_CERTIFICATE_BASE64 copied to clipboard."
 ```
+
+macOS may prompt you to allow keychain access while exporting — click **Allow**.
+
+> **Note:** `security export -t identities` dumps every code-signing identity in your login keychain, not just the Developer ID one. That's fine — when CI signs with `codesign --sign "Developer ID Application: ..."`, only the matching identity is used. After you've set the GitHub secrets and stashed the `.p12` in 1Password, you can `rm ~/Desktop/growlrrr-cert.p12`.
 
 ### 2. Add repository secrets
 
@@ -115,18 +130,18 @@ In **Settings → Secrets and variables → Actions** on the GitHub repo:
 |---|---|
 | `BUILD_CERTIFICATE_BASE64` | The base64-encoded `.p12` |
 | `P12_PASSWORD` | The password used when exporting the `.p12` |
-| `KEYCHAIN_PASSWORD` | Any random string (used for the temporary CI keychain) |
+| `KEYCHAIN_PASSWORD` | Any random string. macOS requires a password to create a keychain, but the keychain on the CI runner is temporary (destroyed when the job finishes) and never accessed by a human — the password is just a technical requirement, not a real security boundary. |
 | `TEAM_NAME` | Your team name as it appears in the Developer ID identity |
 | `TEAM_ID` | Your team ID |
 | `APPLE_ID` | Your Apple ID email |
-| `APPLE_ID_PASSWORD` | The app-specific password from step 3 above |
+| `APPLE_APP_PASSWORD` | The app-specific password from step 3 above |
 
 ### 3. What the workflow does
 
 On a `v*` tag push:
 
 1. Imports the certificate into a temporary keychain on the runner.
-2. Runs `scripts/release.sh` with `TEAM_NAME`, `TEAM_ID`, `APPLE_ID`, `APPLE_ID_PASSWORD` set in the environment, which:
+2. Runs `scripts/release.sh` with `TEAM_NAME`, `TEAM_ID`, `APPLE_ID`, `APPLE_APP_PASSWORD` set in the environment, which:
    - Calls `scripts/bundle.sh` to build and sign the app with Developer ID + hardened runtime + timestamp.
    - Calls `notarytool submit --wait` with inline credentials.
    - Calls `stapler staple` on the bundle.

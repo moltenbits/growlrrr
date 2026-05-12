@@ -99,11 +99,11 @@ notarize-submit: bundle-release
 	echo "Zipping for notarization..."; \
 	rm -f "$$ZIP_PATH"; \
 	ditto -c -k --keepParent "$$APP_BUNDLE" "$$ZIP_PATH"; \
-	if [ -n "$$APPLE_ID" ] && [ -n "$$APPLE_ID_PASSWORD" ] && [ -n "$$TEAM_ID" ]; then \
+	if [ -n "$$APPLE_ID" ] && [ -n "$$APPLE_APP_PASSWORD" ] && [ -n "$$TEAM_ID" ]; then \
 		echo "Submitting to Apple notary service (inline credentials)..."; \
 		SUBMIT_ID=$$(xcrun notarytool submit "$$ZIP_PATH" \
 			--apple-id "$$APPLE_ID" \
-			--password "$$APPLE_ID_PASSWORD" \
+			--password "$$APPLE_APP_PASSWORD" \
 			--team-id "$$TEAM_ID" \
 			--output-format json | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4); \
 	else \
@@ -126,9 +126,9 @@ notarize-status: ## Check the status of the most recent submission
 	if [ ! -f "$$ID_FILE" ]; then echo "No submission ID file at $$ID_FILE"; exit 1; fi; \
 	SUBMIT_ID=$$(cat "$$ID_FILE"); \
 	echo "Checking status of $$SUBMIT_ID..."; \
-	if [ -n "$$APPLE_ID" ] && [ -n "$$APPLE_ID_PASSWORD" ] && [ -n "$$TEAM_ID" ]; then \
+	if [ -n "$$APPLE_ID" ] && [ -n "$$APPLE_APP_PASSWORD" ] && [ -n "$$TEAM_ID" ]; then \
 		xcrun notarytool info "$$SUBMIT_ID" \
-			--apple-id "$$APPLE_ID" --password "$$APPLE_ID_PASSWORD" --team-id "$$TEAM_ID"; \
+			--apple-id "$$APPLE_ID" --password "$$APPLE_APP_PASSWORD" --team-id "$$TEAM_ID"; \
 	else \
 		PROFILE=$${NOTARY_PROFILE:-growlrrr-notarization}; \
 		xcrun notarytool info "$$SUBMIT_ID" --keychain-profile "$$PROFILE"; \
@@ -143,9 +143,9 @@ notarize-finalize: ## Wait for the most recent submission, then staple + re-zip
 	SUBMIT_ID=$$(cat "$$ID_FILE"); \
 	NOTARY_TIMEOUT=$${NOTARY_TIMEOUT:-30m}; \
 	echo "Waiting on $$SUBMIT_ID (timeout $$NOTARY_TIMEOUT)..."; \
-	if [ -n "$$APPLE_ID" ] && [ -n "$$APPLE_ID_PASSWORD" ] && [ -n "$$TEAM_ID" ]; then \
+	if [ -n "$$APPLE_ID" ] && [ -n "$$APPLE_APP_PASSWORD" ] && [ -n "$$TEAM_ID" ]; then \
 		xcrun notarytool wait "$$SUBMIT_ID" \
-			--apple-id "$$APPLE_ID" --password "$$APPLE_ID_PASSWORD" --team-id "$$TEAM_ID" \
+			--apple-id "$$APPLE_ID" --password "$$APPLE_APP_PASSWORD" --team-id "$$TEAM_ID" \
 			--timeout "$$NOTARY_TIMEOUT"; \
 	else \
 		PROFILE=$${NOTARY_PROFILE:-growlrrr-notarization}; \
