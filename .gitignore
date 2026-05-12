@@ -40,3 +40,6 @@ dist/
 *.swp
 *.swo
 *~
+
+# Local environment
+.env
