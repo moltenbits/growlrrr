@@ -1,4 +1,5 @@
 import Foundation
+import GrowlrrrCore
 
 enum ReactivateScript {
     // Map TERM_PROGRAM values to macOS app names for simple activation
@@ -37,16 +38,14 @@ enum ReactivateScript {
     }
 
     private static func generateITermReactivateScript() -> String? {
-        // Strategy 1: Use ITERM_SESSION_ID environment variable.
-        // iTerm2 sets this directly in every session. This avoids the
-        // AppleScript "current window" call which can fail when a Profile
-        // uses a customized window name.
-        // Format is "w{n}t{n}p{n}:{GUID}" — the AppleScript id property
-        // returns just the GUID portion, so we strip the prefix.
+        // Strategy 1: Use ITERM_SESSION_ID environment variable with iTerm2's
+        // reveal URL. iTerm2 sets the variable directly in every session, and
+        // the URL handler finds the session even when its window is minimized
+        // or the z-order shifts mid-script — the AppleScript loop below can
+        // land on the wrong window in both cases.
         if let envSessionId = ProcessInfo.processInfo.environment["ITERM_SESSION_ID"],
-           !envSessionId.isEmpty {
-            let sessionId = envSessionId.split(separator: ":").last.map(String.init) ?? envSessionId
-            return generateITermReactivateBySessionId(sessionId)
+           let revealCommand = ITermSession.revealCommand(sessionId: envSessionId) {
+            return revealCommand
         }
 
         // Strategy 2: Use tty path to identify the session.

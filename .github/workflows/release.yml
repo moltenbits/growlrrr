@@ -24,10 +24,6 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Update version in source
-        run: |
-          sed -i '' 's/version: "[^"]*"/version: "${{ steps.version.outputs.version }}"/' Sources/growlrrr/Growlrrr.swift
-
       - name: Import Developer ID Application certificate
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}

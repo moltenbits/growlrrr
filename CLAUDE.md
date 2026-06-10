@@ -45,8 +45,8 @@ The app handles two launch modes in `GrowlrrrMain`:
 
 ### Terminal Reactivation (`--reactivate`)
 
-Captures terminal identity at send time and embeds AppleScript in the notification's `execute` field:
-- **iTerm2**: Uses `ITERM_SESSION_ID` env var (must strip `wXtXpX:` prefix to match AppleScript session IDs), falls back to TTY-based detection
+Captures terminal identity at send time and embeds a shell command in the notification's `execute` field:
+- **iTerm2**: Uses `ITERM_SESSION_ID` env var with iTerm2's `iterm2:reveal?sessionid=` URL — pass the full value unstripped (iTerm strips the `wXtXpX:` prefix itself) and use the opaque URL form (`iterm2:reveal`, not `iterm2:///reveal`). Finds sessions in minimized windows and avoids AppleScript z-order races. Falls back to TTY-based AppleScript detection (which matches the bare GUID, stripped) when the env var is absent
 - **Terminal.app**: Captures window/tab IDs via AppleScript
 - **Other terminals** (Warp, Alacritty, kitty): Simple app activation
 

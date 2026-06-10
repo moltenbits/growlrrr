@@ -109,7 +109,7 @@ struct Growlrrr: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "growlrrr",
         abstract: "A modern CLI tool for macOS notifications",
-        version: "0.1.0",
+        version: AppVersion.current(),
         subcommands: [Send.self, List.self, Clear.self, Authorize.self, Apps.self, Hook.self, Activate.self, Init.self],
         defaultSubcommand: Send.self
     )

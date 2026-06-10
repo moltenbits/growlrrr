@@ -9,8 +9,8 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/.build"
 DIST_DIR="$PROJECT_DIR/dist"
 
-# Get version from Package.swift or use provided version
-VERSION="${1:-$(grep -o 'version: "[^"]*"' "$PROJECT_DIR/Sources/growlrrr/Growlrrr.swift" | head -1 | cut -d'"' -f2)}"
+# Use the provided version (CI passes the tag), or derive one from git
+VERSION="${1:-$(git -C "$PROJECT_DIR" describe --tags --always --dirty 2>/dev/null | sed 's/^v//')}"
 
 if [[ -z "$VERSION" ]]; then
     echo "Error: Could not determine version"
@@ -19,8 +19,10 @@ fi
 
 echo "Building growlrrr v$VERSION for release..."
 
-# Build release bundle (signs with Developer ID if TEAM_NAME/TEAM_ID env vars set)
-"$SCRIPT_DIR/bundle.sh" release
+# Build release bundle (signs with Developer ID if TEAM_NAME/TEAM_ID env vars set).
+# bundle.sh stamps $VERSION into the bundle's Info.plist, which is where the
+# binary's --version comes from.
+VERSION="$VERSION" "$SCRIPT_DIR/bundle.sh" release
 
 APP_BUNDLE="$BUILD_DIR/release/growlrrr.app"
 

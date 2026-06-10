@@ -51,12 +51,14 @@ extension Growlrrr.Hook {
 
             let subtitle: String?
             let message: String
+            let stdinSessionId: String?
             do {
                 guard let json = try JSONSerialization.jsonObject(with: stdinData) as? [String: Any] else {
                     fputs("Error: stdin must be a JSON object\n", stderr)
                     throw ExitCode(1)
                 }
 
+                stdinSessionId = json["session_id"] as? String
                 let eventName = json["hook_event_name"] as? String
 
                 if eventName == "Stop" {
@@ -78,10 +80,10 @@ extension Growlrrr.Hook {
             // Resolve title: explicit --title wins, then appId, then "Growlrrr"
             let resolvedTitle = title ?? appId ?? "Growlrrr"
 
-            // Derive session ID: env var > appId > "default".
-            // Using appId ensures each custom app gets its own tracking file,
-            // preventing cross-session dismiss conflicts between Claude Code instances.
-            let sessionId = ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"] ?? appId ?? "default"
+            let sessionId = HookSession.derive(
+                environmentSessionId: ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"],
+                stdinSessionId: stdinSessionId,
+                appId: appId)
             let identifier = replace ? "growlrrr-hook" : "growlrrr-hook-\(sessionId)"
 
             // Build reactivate script
@@ -174,7 +176,20 @@ extension Growlrrr.Hook {
         var appId: String?
 
         func run() async throws {
-            let sessionId = ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"] ?? appId ?? "default"
+            // Claude Code pipes hook JSON on stdin; skip it when run from a
+            // terminal so a manual invocation doesn't block waiting for EOF.
+            var stdinSessionId: String? = nil
+            if isatty(STDIN_FILENO) == 0 {
+                let stdinData = FileHandle.standardInput.readDataToEndOfFile()
+                if let json = try? JSONSerialization.jsonObject(with: stdinData) as? [String: Any] {
+                    stdinSessionId = json["session_id"] as? String
+                }
+            }
+
+            let sessionId = HookSession.derive(
+                environmentSessionId: ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"],
+                stdinSessionId: stdinSessionId,
+                appId: appId)
 
             // Derive the notification identifiers — clear both possible formats
             // in case --replace was used on the notify side
