@@ -328,7 +328,7 @@ public enum CustomAppBundle {
 
     // MARK: - Private Helpers
 
-    private static func findSourceBundle() -> String? {
+    static func findSourceBundle() -> String? {
         let executablePath = ProcessInfo.processInfo.arguments[0]
         var url = URL(fileURLWithPath: executablePath)
 

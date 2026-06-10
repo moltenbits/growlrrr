@@ -54,6 +54,18 @@ cp "$BUILD_DIR/$BUILD_CONFIG/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 # Copy Info.plist
 cp "$RESOURCES_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
 
+# Stamp the version into the bundle. The binary reads it back at runtime
+# (AppVersion.current), so CFBundleShortVersionString is the single source
+# of truth for --version. Priority: $VERSION (set by release.sh from the
+# tag), then git describe for traceable dev builds.
+if [[ -z "${VERSION:-}" ]]; then
+    VERSION="$(git -C "$PROJECT_DIR" describe --tags --always --dirty 2>/dev/null | sed 's/^v//')"
+fi
+VERSION="${VERSION:-0.0.0-dev}"
+echo "Stamping version: $VERSION"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$CONTENTS_DIR/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$CONTENTS_DIR/Info.plist"
+
 # Copy app icon if it exists
 if [[ -f "$RESOURCES_DIR/AppIcon.icns" ]]; then
     cp "$RESOURCES_DIR/AppIcon.icns" "$RESOURCES_DEST/AppIcon.icns"
