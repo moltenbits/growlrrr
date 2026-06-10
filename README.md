@@ -88,7 +88,8 @@ grrr --execute "./scripts/deploy.sh" "Ready to deploy - click to start"
 grrr --reactivate "Task complete - click to return"
 
 # Terminal reactivation details:
-#   iTerm2:      Uses ITERM_SESSION_ID env var — always targets the correct session
+#   iTerm2:      Uses ITERM_SESSION_ID env var with iTerm2's reveal URL — targets
+#                the exact session even if its window is minimized or behind others
 #   Terminal.app: Captures window/tab ID at send time via AppleScript
 #   Ghostty:     Captures terminal UUID at send time via AppleScript — if you switch
 #                Ghostty tabs between starting a command and the notification firing,
@@ -375,9 +376,9 @@ Each custom app appears as a separate entry, so you can configure notification s
 
 ### Automation (Apple Events)
 
-**Required for:** `--reactivate` with terminals that support AppleScript (iTerm2, Terminal.app, Ghostty)
+**Required for:** `--reactivate` with Terminal.app and Ghostty, and as an iTerm2 fallback
 
-When a notification with `--reactivate` is clicked, growlrrr uses AppleScript to focus the specific terminal window/tab. macOS requires explicit permission for one app to send Apple Events to another. You'll see a prompt like:
+When a notification with `--reactivate` is clicked, growlrrr uses AppleScript to focus the specific terminal window/tab. macOS requires explicit permission for one app to send Apple Events to another. (iTerm2 normally doesn't need this: when `ITERM_SESSION_ID` is set, growlrrr focuses the session via iTerm2's `iterm2:reveal` URL scheme instead of AppleScript.) You'll see a prompt like:
 
 > "growlrrr.app" wants access to control "Ghostty.app". Allowing control will provide access to documents and data in "Ghostty.app", and to perform actions within that app.
 
