@@ -267,7 +267,7 @@ growlrrr can also generate Codex configuration for native macOS notifications:
 grrr init --format codex
 ```
 
-Copy the output into `~/.codex/config.toml` (or merge the `notify` setting into an existing config). Codex only supports external notifier commands from user-level config, so do not put this setting in a project `.codex/config.toml`.
+Copy the output into `~/.codex/config.toml` (or merge the `notify` setting into an existing config). The generated config uses `grrr hook notify` so Codex notifications match the Claude Code hook notification style. Codex only supports external notifier commands from user-level config, so do not put this setting in a project `.codex/config.toml`.
 
 #### Hook Options
 
@@ -276,9 +276,11 @@ Copy the output into `~/.codex/config.toml` (or merge the `notify` setting into 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--title`, `-t` | Notification title | `Growlrrr` |
+| `--message`, `-m` | Notification message; when set, stdin JSON is optional | _(from hook JSON)_ |
 | `--sound` | Sound: `default`, `none`, or system sound name | `default` |
 | `--appId` | Use a custom app (create with `grrr apps add`) | _(none)_ |
 | `--reactivate` / `--no-reactivate` | Reactivate terminal on click | `--reactivate` |
+| `--replace` | Replace any existing hook notification instead of stacking | `false` |
 
 ### Activate notifications via keyboard shortcut
 
