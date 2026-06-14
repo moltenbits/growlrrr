@@ -15,11 +15,10 @@ final class InitFormatTests: XCTestCase {
   func testCodexFormatOutputsConfigToml() {
     let output = InitFormat.codexConfigTOML()
 
-    XCTAssertTrue(output.contains(#"notify = ["grrr", "send""#))
-    XCTAssertTrue(output.contains(#""--title", "Codex""#))
-    XCTAssertTrue(output.contains(#""--reactivate""#))
-    XCTAssertTrue(output.contains(#""Codex needs your attention""#))
+    XCTAssertTrue(output.contains(#"notify = ["grrr", "hook", "notify""#))
+    XCTAssertTrue(output.contains(#""--message", "Codex is ready""#))
+    XCTAssertTrue(output.contains(#""--replace""#))
     XCTAssertTrue(output.contains("# Add this to ~/.codex/config.toml"))
-    XCTAssertFalse(output.contains("hook notify"))
+    XCTAssertFalse(output.contains(#""send""#))
   }
 }
