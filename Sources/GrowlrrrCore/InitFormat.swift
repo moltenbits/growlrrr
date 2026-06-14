@@ -42,7 +42,7 @@ public enum InitFormat {
     return """
       # Add this to ~/.codex/config.toml
       # Codex project .codex/config.toml files cannot set external notifiers.
-      notify = ["grrr", "hook", "notify", "--message", "Codex is ready", "--replace"]
+      notify = ["grrr", "hook", "notify", "--message", "Codex is waiting for your input", "--replace"]
       """
   }
 }
