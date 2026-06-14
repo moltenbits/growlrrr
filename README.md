@@ -259,6 +259,16 @@ Copy the output into your project's `.claude/settings.json` (or merge into an ex
 
 The notification identifiers are derived from `--appId` (or `GROWLRRR_SESSION_ID`), so each terminal session's notifications are managed independently. The shell hooks from `grrr init` will also dismiss Claude Code notifications when you return to a regular shell prompt.
 
+### Codex integration
+
+growlrrr can also generate Codex configuration for native macOS notifications:
+
+```bash
+grrr init --format codex
+```
+
+Copy the output into `~/.codex/config.toml` (or merge the `notify` setting into an existing config). Codex only supports external notifier commands from user-level config, so do not put this setting in a project `.codex/config.toml`.
+
 #### Hook Options
 
 `grrr hook notify` accepts options to customize behavior:

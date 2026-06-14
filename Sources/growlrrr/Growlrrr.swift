@@ -808,16 +808,18 @@ extension Growlrrr {
         @Option(name: .long, help: "Shell type (zsh or bash). Auto-detected from $SHELL if omitted.")
         var shell: String?
 
-        @Option(name: .long, help: "Output format (claude-code for Claude Code hooks JSON)")
+        @Option(name: .long, help: "Output format (claude-code for Claude Code hooks JSON, codex for Codex config TOML)")
         var format: String?
 
         func run() throws {
             if let format = format?.lowercased() {
                 switch format {
                 case "claude-code":
-                    print(Self.claudeCodeHooksJSON())
+                    print(InitFormat.claudeCodeHooksJSON())
+                case "codex":
+                    print(InitFormat.codexConfigTOML())
                 default:
-                    fputs("Error: Unknown format '\(format)'. Supported: claude-code\n", stderr)
+                    fputs("Error: Unknown format '\(format)'. Supported: claude-code, codex\n", stderr)
                     throw ExitCode(1)
                 }
                 return
@@ -853,47 +855,6 @@ extension Growlrrr {
             if base == "bash" { return "bash" }
             fputs("Error: Unsupported shell '\(base)'. Supported: zsh, bash\n", stderr)
             throw ExitCode(1)
-        }
-
-        // MARK: - Claude Code Hooks JSON
-
-        static func claudeCodeHooksJSON() -> String {
-            return """
-            {
-              "hooks": {
-                "Stop": [
-                  {
-                    "hooks": [
-                      {
-                        "type": "command",
-                        "command": "grrr hook notify"
-                      }
-                    ]
-                  }
-                ],
-                "Notification": [
-                  {
-                    "hooks": [
-                      {
-                        "type": "command",
-                        "command": "grrr hook notify"
-                      }
-                    ]
-                  }
-                ],
-                "UserPromptSubmit": [
-                  {
-                    "hooks": [
-                      {
-                        "type": "command",
-                        "command": "grrr hook dismiss"
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-            """
         }
 
         // MARK: - Zsh Hook Script
