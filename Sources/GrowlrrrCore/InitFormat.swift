@@ -43,6 +43,9 @@ public enum InitFormat {
       # Add this to ~/.codex/config.toml
       # Codex project .codex/config.toml files only load after you trust the project.
 
+      [tui]
+      notifications = false
+
       [[hooks.Stop]]
       [[hooks.Stop.hooks]]
       type = "command"
