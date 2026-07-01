@@ -267,7 +267,7 @@ growlrrr can also generate Codex configuration for native macOS notifications:
 grrr init --format codex
 ```
 
-Copy the output into `~/.codex/config.toml` (or merge the generated hook tables into an existing config). The generated config uses Codex lifecycle hooks, so `grrr hook notify --codex` receives Codex's hook JSON and can include details such as the final assistant message, requested tool, command, or permission reason.
+Copy the output into `~/.codex/config.toml` (or merge the generated hook tables into an existing config). The generated config disables Codex's built-in TUI notifications and uses Codex lifecycle hooks instead, so `grrr hook notify --codex` receives Codex's hook JSON and can include details such as the final assistant message, requested tool, command, or permission reason.
 
 This configures three hooks:
 
