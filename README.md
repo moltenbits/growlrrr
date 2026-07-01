@@ -251,7 +251,7 @@ Generate the hooks configuration:
 grrr init --format claude-code
 ```
 
-Copy the output into your project's `.claude/settings.json` (or merge into an existing one). This configures two hooks:
+Copy the output into your project's `.claude/settings.json` (or merge into an existing one). This configures three hooks:
 
 - **Stop** — runs `grrr hook notify` when Claude finishes responding
 - **Notification** — runs `grrr hook notify` when Claude needs attention (permission prompts, idle checks, etc.)
@@ -267,7 +267,15 @@ growlrrr can also generate Codex configuration for native macOS notifications:
 grrr init --format codex
 ```
 
-Copy the output into `~/.codex/config.toml` (or merge the `notify` setting into an existing config). The generated config uses `grrr hook notify` so Codex notifications match the Claude Code hook notification style. Codex only supports external notifier commands from user-level config, so do not put this setting in a project `.codex/config.toml`.
+Copy the output into `~/.codex/config.toml` (or merge the generated hook tables into an existing config). The generated config uses Codex lifecycle hooks, so `grrr hook notify --codex` receives Codex's hook JSON and can include details such as the final assistant message, requested tool, command, or permission reason.
+
+This configures three hooks:
+
+- **Stop** — runs `grrr hook notify --codex` when Codex finishes a turn, using `last_assistant_message` when available
+- **PermissionRequest** — runs `grrr hook notify --codex` when Codex needs approval, using `tool_name`, `tool_input.description`, and `tool_input.command` when available
+- **UserPromptSubmit** — runs `grrr hook dismiss`, which clears any outstanding notification for the current session
+
+User-level `~/.codex/config.toml` hooks work across projects. Project `.codex/config.toml` hooks can also work, but only after the project is trusted and the hook has been reviewed in Codex.
 
 #### Hook Options
 
@@ -277,6 +285,7 @@ Copy the output into `~/.codex/config.toml` (or merge the `notify` setting into 
 |--------|-------------|---------|
 | `--title`, `-t` | Notification title | `Growlrrr` |
 | `--message`, `-m` | Notification message; when set, stdin JSON is optional | _(from hook JSON)_ |
+| `--codex` | Parse stdin as Codex hook JSON | `false` |
 | `--sound` | Sound: `default`, `none`, or system sound name | `default` |
 | `--appId` | Use a custom app (create with `grrr apps add`) | _(none)_ |
 | `--reactivate` / `--no-reactivate` | Reactivate terminal on click | `--reactivate` |
