@@ -41,6 +41,9 @@ extension Growlrrr.Hook {
         @Flag(name: .long, help: "Replace any existing notification instead of stacking a new one")
         var replace: Bool = false
 
+        @Flag(name: .long, help: "Parse stdin as Codex hook JSON")
+        var codex: Bool = false
+
         func run() async throws {
             let subtitle: String?
             let resolvedMessage: String
@@ -66,18 +69,12 @@ extension Growlrrr.Hook {
                         throw ExitCode(1)
                     }
 
-                    stdinSessionId = json["session_id"] as? String
-                    let eventName = json["hook_event_name"] as? String
-
-                    if eventName == "Stop" {
-                        // Stop event — Claude finished responding
-                        subtitle = nil
-                        resolvedMessage = "Claude is ready"
-                    } else {
-                        // Notification event or generic JSON
-                        subtitle = json["title"] as? String
-                        resolvedMessage = (json["message"] as? String) ?? "Notification"
-                    }
+                    let content = codex
+                        ? HookNotificationContentResolver.codex(from: json)
+                        : HookNotificationContentResolver.claudeCode(from: json)
+                    stdinSessionId = content.sessionId
+                    subtitle = content.subtitle
+                    resolvedMessage = content.message
                 } catch let error as ExitCode {
                     throw error
                 } catch {
