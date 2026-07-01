@@ -26,6 +26,9 @@ extension Growlrrr.Hook {
         @Option(name: .shortAndLong, help: "Notification title (defaults to appId if set, otherwise 'Growlrrr')")
         var title: String?
 
+        @Option(name: .shortAndLong, help: "Notification message. When set, stdin JSON is optional.")
+        var message: String?
+
         @Option(name: .long, help: "Sound to play (default, none, or sound name)")
         var sound: String?
 
@@ -38,43 +41,46 @@ extension Growlrrr.Hook {
         @Flag(name: .long, help: "Replace any existing notification instead of stacking a new one")
         var replace: Bool = false
 
-        func run() async throws {
-            // Read JSON from stdin (blocks until EOF).
-            // Supports two schemas:
-            //   Stop event:         {"hook_event_name":"Stop", "last_assistant_message":"..."}
-            //   Notification event: {"title":"...", "message":"..."}
-            let stdinData = FileHandle.standardInput.readDataToEndOfFile()
-            guard !stdinData.isEmpty else {
-                fputs("Error: No input on stdin. Pipe JSON with title/message fields.\n", stderr)
-                throw ExitCode(1)
-            }
+        @Flag(name: .long, help: "Parse stdin as Codex hook JSON")
+        var codex: Bool = false
 
+        func run() async throws {
             let subtitle: String?
-            let message: String
+            let resolvedMessage: String
             let stdinSessionId: String?
-            do {
-                guard let json = try JSONSerialization.jsonObject(with: stdinData) as? [String: Any] else {
-                    fputs("Error: stdin must be a JSON object\n", stderr)
+            if let message {
+                subtitle = nil
+                resolvedMessage = message
+                stdinSessionId = nil
+            } else {
+                // Read JSON from stdin (blocks until EOF).
+                // Supports two schemas:
+                //   Stop event:         {"hook_event_name":"Stop", "last_assistant_message":"..."}
+                //   Notification event: {"title":"...", "message":"..."}
+                let stdinData = FileHandle.standardInput.readDataToEndOfFile()
+                guard !stdinData.isEmpty else {
+                    fputs("Error: No input on stdin. Pipe JSON with title/message fields.\n", stderr)
                     throw ExitCode(1)
                 }
 
-                stdinSessionId = json["session_id"] as? String
-                let eventName = json["hook_event_name"] as? String
+                do {
+                    guard let json = try JSONSerialization.jsonObject(with: stdinData) as? [String: Any] else {
+                        fputs("Error: stdin must be a JSON object\n", stderr)
+                        throw ExitCode(1)
+                    }
 
-                if eventName == "Stop" {
-                    // Stop event — Claude finished responding
-                    subtitle = nil
-                    message = "Claude is ready"
-                } else {
-                    // Notification event or generic JSON
-                    subtitle = json["title"] as? String
-                    message = (json["message"] as? String) ?? "Notification"
+                    let content = codex
+                        ? HookNotificationContentResolver.codex(from: json)
+                        : HookNotificationContentResolver.claudeCode(from: json)
+                    stdinSessionId = content.sessionId
+                    subtitle = content.subtitle
+                    resolvedMessage = content.message
+                } catch let error as ExitCode {
+                    throw error
+                } catch {
+                    fputs("Error: Invalid JSON on stdin: \(error.localizedDescription)\n", stderr)
+                    throw ExitCode(1)
                 }
-            } catch let error as ExitCode {
-                throw error
-            } catch {
-                fputs("Error: Invalid JSON on stdin: \(error.localizedDescription)\n", stderr)
-                throw ExitCode(1)
             }
 
             // Resolve title: explicit --title wins, then appId, then "Growlrrr"
@@ -109,7 +115,7 @@ extension Growlrrr.Hook {
                 if reactivate {
                     args += ["--reactivate"]
                 }
-                args += ["--appId", appId, message]
+                args += ["--appId", appId, resolvedMessage]
 
                 do {
                     try CustomAppBundle.runNotification(
@@ -125,7 +131,7 @@ extension Growlrrr.Hook {
             }
 
             let config = NotificationConfig(
-                message: message,
+                message: resolvedMessage,
                 title: resolvedTitle,
                 subtitle: subtitle,
                 sound: SoundOption.from(sound),
