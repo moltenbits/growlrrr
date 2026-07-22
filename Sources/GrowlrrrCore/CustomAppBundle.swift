@@ -173,6 +173,11 @@ public enum CustomAppBundle {
             .appendingPathComponent("Resources")
             .appendingPathComponent("AppIcon.icns")
 
+        // Tracks whether this call wrote a new icon. ensureBundle runs on every
+        // notification send, so the cache-busting below must not fire when the
+        // icon is untouched.
+        var iconChanged = false
+
         // If bundle doesn't exist, we need an icon to create it
         if !bundleExists {
             guard let iconPath = iconPath else {
@@ -197,9 +202,11 @@ public enum CustomAppBundle {
 
             // Set the icon
             try convertToIcns(sourcePath: iconPath, destinationPath: iconDestination.path)
+            iconChanged = true
         } else if let iconPath = iconPath {
             // Bundle exists and icon provided - update the icon
             try convertToIcns(sourcePath: iconPath, destinationPath: iconDestination.path)
+            iconChanged = true
         }
 
         // Always update the executable to ensure it has the latest code
@@ -220,7 +227,18 @@ public enum CustomAppBundle {
 
         // Re-sign the bundle (always needed after updating executable)
         try signBundle(at: customBundlePath)
+
+        // Bust the icon cache key before Launch Services reads the bundle back,
+        // so everything downstream registers the new modification date.
+        if iconChanged {
+            try? IconCache.touchBundle(at: customBundlePath)
+        }
+
         registerWithLaunchServices(at: customBundlePath)
+
+        if iconChanged {
+            IconCache.restartNotificationServices()
+        }
 
         // Return path to the executable
         return customBundlePath
