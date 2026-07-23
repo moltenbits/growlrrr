@@ -155,10 +155,81 @@ public enum CustomAppBundle {
             .appendingPathComponent("growlrrr")
     }
 
+    // MARK: - Icon Source
+
+    /// Info.plist key recording where a bundle's icon was taken from.
+    /// The converted AppIcon.icns keeps no trace of its origin, so without this
+    /// there is no way to report which image an app is actually using.
+    private static let iconSourceKey = "GrowlrrrIconSource"
+
+    /// Where a custom app's icon came from, and whether it is still there.
+    public enum IconSource: Equatable {
+        /// Recorded, and the file is still present.
+        case recorded(String)
+        /// Recorded, but the file has since moved or been deleted.
+        case missing(String)
+        /// Added before icon sources were tracked, or never recorded.
+        case notRecorded
+
+        public var path: String? {
+            switch self {
+            case .recorded(let path), .missing(let path): return path
+            case .notRecorded: return nil
+            }
+        }
+    }
+
+    /// Read the icon source recorded for a bundle.
+    public static func iconSource(at bundlePath: URL) -> IconSource {
+        let plistPath = bundlePath
+            .appendingPathComponent("Contents")
+            .appendingPathComponent("Info.plist")
+
+        guard let plist = NSDictionary(contentsOf: plistPath) as? [String: Any],
+              let path = plist[iconSourceKey] as? String,
+              !path.isEmpty
+        else {
+            return .notRecorded
+        }
+
+        return FileManager.default.fileExists(atPath: path) ? .recorded(path) : .missing(path)
+    }
+
+    /// Read the icon source recorded for a named custom app.
+    public static func iconSource(forAppName name: String) -> IconSource {
+        iconSource(at: bundlePath(forAppName: name))
+    }
+
+    /// Record where a bundle's icon came from.
+    ///
+    /// Stores an absolute path — a relative one is meaningless by the time
+    /// `apps list` reads it back from a different working directory.
+    public static func recordIconSource(_ sourcePath: String, at bundlePath: URL) throws {
+        let plistPath = bundlePath
+            .appendingPathComponent("Contents")
+            .appendingPathComponent("Info.plist")
+
+        guard var plist = NSDictionary(contentsOf: plistPath) as? [String: Any] else {
+            throw GrowlrrrError.notificationFailed("Could not read Info.plist at \(plistPath.path)")
+        }
+
+        plist[iconSourceKey] = URL(fileURLWithPath: sourcePath).standardizedFileURL.path
+
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: plist,
+            format: .xml,
+            options: 0
+        )
+        try data.write(to: plistPath)
+    }
+
     /// Ensure a custom app bundle exists with the specified icon
     /// If iconPath is nil, the bundle must already exist
+    /// `iconSource` records where the icon came from for `apps list`; it defaults
+    /// to `iconPath`, and callers override it when `iconPath` is a temporary file
+    /// that will not outlive the call.
     /// Returns the path to the executable within the bundle
-    public static func ensureBundle(appName: String, iconPath: String?) throws -> URL {
+    public static func ensureBundle(appName: String, iconPath: String?, iconSource: String? = nil) throws -> URL {
         let customBundlePath = bundlePath(forAppName: appName)
         let customBundleId = bundleIdentifier(forAppName: appName)
 
@@ -225,6 +296,12 @@ public enum CustomAppBundle {
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destExecutable.path)
         }
 
+        // Record the icon's origin before signing, so the seal covers the final
+        // Info.plist. Best-effort: failing here only costs `apps list` detail.
+        if iconChanged, let recordedSource = iconSource ?? iconPath {
+            try? recordIconSource(recordedSource, at: customBundlePath)
+        }
+
         // Re-sign the bundle (always needed after updating executable)
         try signBundle(at: customBundlePath)
 
@@ -274,6 +351,9 @@ public enum CustomAppBundle {
     public struct ResolvedApp {
         public let name: String
         public let iconPath: String
+        /// The application the icon was taken from. `iconPath` is a temporary
+        /// extract, so this is what's worth recording as the icon's origin.
+        public let appPath: String
     }
 
     /// Resolve a macOS bundle identifier to an app name and a temporary PNG icon path.
@@ -341,7 +421,7 @@ public enum CustomAppBundle {
             toPath: tempPng.path
         )
 
-        return ResolvedApp(name: name, iconPath: tempPng.path)
+        return ResolvedApp(name: name, iconPath: tempPng.path, appPath: appURL.path)
     }
 
     // MARK: - Private Helpers
