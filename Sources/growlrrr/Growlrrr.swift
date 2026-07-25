@@ -243,19 +243,20 @@ extension Growlrrr {
 
             if json {
                 let appInfos: [[String: Any]] = apps.map { name in
-                    // NSNull keeps the icon key present for apps added before
-                    // icon sources were tracked.
-                    let icon: Any
-                    if let iconPath = CustomAppBundle.iconSource(forAppName: name).path {
-                        icon = iconPath
+                    // NSNull keeps the iconSource key present for apps added
+                    // before icon sources were tracked.
+                    let iconSource: Any
+                    if let sourcePath = CustomAppBundle.iconSource(forAppName: name).path {
+                        iconSource = sourcePath
                     } else {
-                        icon = NSNull()
+                        iconSource = NSNull()
                     }
                     return [
                         "name": name,
                         "bundleId": "com.moltenbits.growlrrr.\(name)",
                         "path": appsDir.appendingPathComponent("\(name).app").path,
-                        "icon": icon
+                        "icon": CustomAppBundle.iconPath(forAppName: name).path,
+                        "iconSource": iconSource
                     ]
                 }
                 let data = try JSONSerialization.data(withJSONObject: appInfos, options: [.prettyPrinted, .sortedKeys])
@@ -268,14 +269,23 @@ extension Growlrrr {
                     print("  \(name)")
                     print("    Bundle ID: \(bundleId)")
                     print("    Path: \(path)")
-                    switch CustomAppBundle.iconSource(forAppName: name) {
-                    case .recorded(let iconPath):
-                        print("    Icon: \(iconPath)\n")
-                    case .missing(let iconPath):
-                        print("    Icon: \(iconPath) (missing)\n")
-                    case .notRecorded:
-                        print("    Icon: (not recorded)\n")
+                    let iconPath = CustomAppBundle.iconPath(forAppName: name)
+                    if FileManager.default.fileExists(atPath: iconPath.path) {
+                        print("    Icon: \(iconPath.path)")
+                    } else {
+                        print("    Icon: \(iconPath.path) (missing)")
                     }
+                    // The original image is secondary detail — only worth a
+                    // line when it was actually recorded.
+                    switch CustomAppBundle.iconSource(forAppName: name) {
+                    case .recorded(let sourcePath):
+                        print("    Icon source: \(sourcePath)")
+                    case .missing(let sourcePath):
+                        print("    Icon source: \(sourcePath) (missing)")
+                    case .notRecorded:
+                        break
+                    }
+                    print("")
                 }
             }
         }

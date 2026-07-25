@@ -156,6 +156,11 @@ final class GrowlrrrTests: XCTestCase {
         XCTAssertTrue(path.path.contains("TestApp.app/Contents/MacOS/growlrrr"))
     }
 
+    func testIconPath() {
+        let path = CustomAppBundle.iconPath(forAppName: "TestApp")
+        XCTAssertTrue(path.path.contains("TestApp.app/Contents/Resources/AppIcon.icns"))
+    }
+
     func testListCustomApps() {
         // This test verifies the function runs without crashing
         // The actual result depends on the system state

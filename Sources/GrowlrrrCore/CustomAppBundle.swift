@@ -155,6 +155,14 @@ public enum CustomAppBundle {
             .appendingPathComponent("growlrrr")
     }
 
+    /// Get the path to the icon a custom app actually uses
+    public static func iconPath(forAppName name: String) -> URL {
+        bundlePath(forAppName: name)
+            .appendingPathComponent("Contents")
+            .appendingPathComponent("Resources")
+            .appendingPathComponent("AppIcon.icns")
+    }
+
     // MARK: - Icon Source
 
     /// Info.plist key recording where a bundle's icon was taken from.
@@ -239,10 +247,8 @@ public enum CustomAppBundle {
         }
 
         let bundleExists = FileManager.default.fileExists(atPath: customBundlePath.path)
-        let iconDestination = customBundlePath
-            .appendingPathComponent("Contents")
-            .appendingPathComponent("Resources")
-            .appendingPathComponent("AppIcon.icns")
+        // Self-qualified: the iconPath parameter shadows the static helper
+        let iconDestination = Self.iconPath(forAppName: appName)
 
         // Tracks whether this call wrote a new icon. ensureBundle runs on every
         // notification send, so the cache-busting below must not fire when the
