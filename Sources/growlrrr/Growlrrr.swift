@@ -145,11 +145,16 @@ extension Growlrrr {
             // Resolve the app name and icon path
             let resolvedName: String
             let resolvedIcon: String
+            // What `apps list` reports as the icon's origin. Differs from
+            // resolvedIcon when --bundleID is used, since that icon is a
+            // temporary extract that won't exist by the time anyone lists it.
+            let recordedSource: String
 
             if let bundleID = bundleID {
                 let resolved = try CustomAppBundle.resolveSystemApp(bundleIdentifier: bundleID)
                 resolvedName = appId ?? resolved.name
                 resolvedIcon = appIcon ?? resolved.iconPath
+                recordedSource = appIcon ?? resolved.appPath
             } else {
                 guard let name = appId else {
                     fputs("Error: --appId is required when --bundleID is not provided\n", stderr)
@@ -161,6 +166,7 @@ extension Growlrrr {
                 }
                 resolvedName = name
                 resolvedIcon = icon
+                recordedSource = icon
             }
 
             // Validate app ID
@@ -178,7 +184,11 @@ extension Growlrrr {
 
             // Create or update the custom app bundle
             do {
-                _ = try CustomAppBundle.ensureBundle(appName: resolvedName, iconPath: resolvedIcon)
+                _ = try CustomAppBundle.ensureBundle(
+                    appName: resolvedName,
+                    iconPath: resolvedIcon,
+                    iconSource: recordedSource
+                )
                 print("Created custom app '\(resolvedName)'")
                 print("Bundle: \(CustomAppBundle.bundlePath(forAppName: resolvedName).path)")
                 print("\nUse it with: growlrrr --appId \(resolvedName) \"Your message\"")
@@ -232,11 +242,21 @@ extension Growlrrr {
             }
 
             if json {
-                let appInfos = apps.map { name in
-                    [
+                let appInfos: [[String: Any]] = apps.map { name in
+                    // NSNull keeps the iconSource key present for apps added
+                    // before icon sources were tracked.
+                    let iconSource: Any
+                    if let sourcePath = CustomAppBundle.iconSource(forAppName: name).path {
+                        iconSource = sourcePath
+                    } else {
+                        iconSource = NSNull()
+                    }
+                    return [
                         "name": name,
                         "bundleId": "com.moltenbits.growlrrr.\(name)",
-                        "path": appsDir.appendingPathComponent("\(name).app").path
+                        "path": appsDir.appendingPathComponent("\(name).app").path,
+                        "icon": CustomAppBundle.iconPath(forAppName: name).path,
+                        "iconSource": iconSource
                     ]
                 }
                 let data = try JSONSerialization.data(withJSONObject: appInfos, options: [.prettyPrinted, .sortedKeys])
@@ -248,7 +268,24 @@ extension Growlrrr {
                     let path = appsDir.appendingPathComponent("\(name).app").path
                     print("  \(name)")
                     print("    Bundle ID: \(bundleId)")
-                    print("    Path: \(path)\n")
+                    print("    Path: \(path)")
+                    let iconPath = CustomAppBundle.iconPath(forAppName: name)
+                    if FileManager.default.fileExists(atPath: iconPath.path) {
+                        print("    Icon: \(iconPath.path)")
+                    } else {
+                        print("    Icon: \(iconPath.path) (missing)")
+                    }
+                    // The original image is secondary detail — only worth a
+                    // line when it was actually recorded.
+                    switch CustomAppBundle.iconSource(forAppName: name) {
+                    case .recorded(let sourcePath):
+                        print("    Icon source: \(sourcePath)")
+                    case .missing(let sourcePath):
+                        print("    Icon source: \(sourcePath) (missing)")
+                    case .notRecorded:
+                        break
+                    }
+                    print("")
                 }
             }
         }
