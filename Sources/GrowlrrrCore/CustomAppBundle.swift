@@ -320,6 +320,9 @@ public enum CustomAppBundle {
         registerWithLaunchServices(at: customBundlePath)
 
         if iconChanged {
+            // The store wipe must precede the daemon restarts so the respawned
+            // daemons resolve icons against an empty store, not the stale one.
+            IconCache.flushIconStores()
             IconCache.restartNotificationServices()
         }
 

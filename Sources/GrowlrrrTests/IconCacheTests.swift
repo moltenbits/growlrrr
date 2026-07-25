@@ -70,4 +70,73 @@ final class IconCacheTests: XCTestCase {
         XCTAssertTrue(IconCache.notificationServices.contains("usernoted"))
         XCTAssertTrue(IconCache.notificationServices.contains("NotificationCenter"))
     }
+
+    // MARK: - Icon store discovery
+
+    private func makeDirs(_ relativePaths: [String], under root: URL) throws {
+        for path in relativePaths {
+            try FileManager.default.createDirectory(
+                at: root.appendingPathComponent(path),
+                withIntermediateDirectories: true
+            )
+        }
+    }
+
+    func testIconStorePathsFindsStoresInCacheDirectories() throws {
+        try makeDirs(
+            [
+                "dc/4r9xabc/C/com.apple.iconservicesagent",
+                "dc/4r9xabc/C/com.apple.iconservices",
+            ],
+            under: tempBundle
+        )
+
+        let found = IconCache.iconStorePaths(under: tempBundle).map(\.lastPathComponent).sorted()
+        XCTAssertEqual(found, ["com.apple.iconservices", "com.apple.iconservicesagent"])
+    }
+
+    /// The T/ sibling of the C/ cache directory is the agent's live temp
+    /// directory — deleting it out from under the running agent is not the
+    /// proven recipe and must never happen.
+    func testIconStorePathsIgnoresTempDirectories() throws {
+        try makeDirs(
+            [
+                "dc/4r9xabc/T/com.apple.iconservicesagent",
+                "dc/4r9xabc/C/unrelated-directory",
+            ],
+            under: tempBundle
+        )
+
+        XCTAssertEqual(IconCache.iconStorePaths(under: tempBundle), [])
+    }
+
+    func testIconStorePathsHonorsDepthLimit() throws {
+        try makeDirs(["a/b/c/d/e/C/com.apple.iconservices"], under: tempBundle)
+
+        XCTAssertEqual(IconCache.iconStorePaths(under: tempBundle), [])
+    }
+
+    func testFlushIconStoresRemovesStoresAndLeavesTempAlone() throws {
+        try makeDirs(
+            [
+                "dc/4r9xabc/C/com.apple.iconservicesagent/store-contents",
+                "dc/4r9xabc/T/com.apple.iconservicesagent",
+            ],
+            under: tempBundle
+        )
+
+        let removed = IconCache.flushIconStores(under: tempBundle)
+
+        XCTAssertEqual(removed.map(\.lastPathComponent), ["com.apple.iconservicesagent"])
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: tempBundle.appendingPathComponent("dc/4r9xabc/C/com.apple.iconservicesagent").path
+            )
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: tempBundle.appendingPathComponent("dc/4r9xabc/T/com.apple.iconservicesagent").path
+            )
+        )
+    }
 }
