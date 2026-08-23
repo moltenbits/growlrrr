@@ -1,5 +1,7 @@
 public enum InitFormat {
-  public static func claudeCodeHooksJSON() -> String {
+  public static func claudeCodeHooksJSON(appId: String? = nil) -> String {
+    let appArgument = customAppArgument(appId)
+
     return """
       {
         "hooks": {
@@ -8,7 +10,7 @@ public enum InitFormat {
               "hooks": [
                 {
                   "type": "command",
-                  "command": "grrr hook notify"
+                  "command": "grrr hook notify\(appArgument)"
                 }
               ]
             }
@@ -18,7 +20,7 @@ public enum InitFormat {
               "hooks": [
                 {
                   "type": "command",
-                  "command": "grrr hook notify"
+                  "command": "grrr hook notify\(appArgument)"
                 }
               ]
             }
@@ -28,7 +30,7 @@ public enum InitFormat {
               "hooks": [
                 {
                   "type": "command",
-                  "command": "grrr hook dismiss"
+                  "command": "grrr hook dismiss\(appArgument)"
                 }
               ]
             }
@@ -38,7 +40,9 @@ public enum InitFormat {
       """
   }
 
-  public static func codexConfigTOML() -> String {
+  public static func codexConfigTOML(appId: String? = nil) -> String {
+    let appArgument = customAppArgument(appId)
+
     return """
       # Add this to ~/.codex/config.toml
       # Codex project .codex/config.toml files only load after you trust the project.
@@ -49,21 +53,26 @@ public enum InitFormat {
       [[hooks.Stop]]
       [[hooks.Stop.hooks]]
       type = "command"
-      command = "grrr hook notify --codex"
+      command = "grrr hook notify --codex\(appArgument)"
       timeout = 30
 
       [[hooks.PermissionRequest]]
       [[hooks.PermissionRequest.hooks]]
       type = "command"
-      command = "grrr hook notify --codex"
+      command = "grrr hook notify --codex\(appArgument)"
       timeout = 30
       statusMessage = "Sending notification"
 
       [[hooks.UserPromptSubmit]]
       [[hooks.UserPromptSubmit.hooks]]
       type = "command"
-      command = "grrr hook dismiss"
+      command = "grrr hook dismiss\(appArgument)"
       timeout = 30
       """
+  }
+
+  private static func customAppArgument(_ appId: String?) -> String {
+    guard let appId else { return "" }
+    return " --appId \(appId)"
   }
 }

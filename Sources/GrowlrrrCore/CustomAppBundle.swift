@@ -2,6 +2,15 @@ import AppKit
 import Foundation
 
 public enum CustomAppBundle {
+    private static let validAppNameRegex = try! NSRegularExpression(
+        pattern: "^[a-zA-Z][a-zA-Z0-9_-]*$"
+    )
+
+    public static func isValidAppName(_ name: String) -> Bool {
+        let range = NSRange(name.startIndex..., in: name)
+        return validAppNameRegex.firstMatch(in: name, range: range) != nil
+    }
+
     /// Base directory for custom app bundles
     private static var appsDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser

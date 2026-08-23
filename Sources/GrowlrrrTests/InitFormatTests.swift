@@ -12,6 +12,13 @@ final class InitFormatTests: XCTestCase {
     XCTAssertTrue(output.contains(#""command": "grrr hook dismiss""#))
   }
 
+  func testClaudeCodeFormatTargetsCustomApp() {
+    let output = InitFormat.claudeCodeHooksJSON(appId: "ClaudeCode")
+
+    XCTAssertTrue(output.contains(#""command": "grrr hook notify --appId ClaudeCode""#))
+    XCTAssertTrue(output.contains(#""command": "grrr hook dismiss --appId ClaudeCode""#))
+  }
+
   func testCodexFormatOutputsConfigToml() {
     let output = InitFormat.codexConfigTOML()
 
@@ -25,5 +32,12 @@ final class InitFormatTests: XCTestCase {
     XCTAssertTrue(output.contains("# Add this to ~/.codex/config.toml"))
     XCTAssertFalse(output.contains("notify ="))
     XCTAssertFalse(output.contains(#""send""#))
+  }
+
+  func testCodexFormatTargetsCustomApp() {
+    let output = InitFormat.codexConfigTOML(appId: "Codex")
+
+    XCTAssertTrue(output.contains(#"command = "grrr hook notify --codex --appId Codex""#))
+    XCTAssertTrue(output.contains(#"command = "grrr hook dismiss --appId Codex""#))
   }
 }

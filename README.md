@@ -251,6 +251,14 @@ Generate the hooks configuration:
 grrr init --format claude-code
 ```
 
+To route the hooks through an existing custom growlrrr app, include its app ID:
+
+```bash
+grrr init --format claude-code --appId ClaudeCode
+```
+
+The generated notify and dismiss commands will both include `--appId ClaudeCode`. Create the custom app first with `grrr apps add`.
+
 Copy the output into your project's `.claude/settings.json` (or merge into an existing one). This configures three hooks:
 
 - **Stop** — runs `grrr hook notify` when Claude finishes responding
@@ -266,6 +274,14 @@ growlrrr can also generate Codex configuration for native macOS notifications:
 ```bash
 grrr init --format codex
 ```
+
+To route the hooks through an existing custom growlrrr app, include its app ID:
+
+```bash
+grrr init --format codex --appId Codex
+```
+
+The generated notify and dismiss commands will both include `--appId Codex`. Create the custom app first with `grrr apps add`.
 
 Copy the output into `~/.codex/config.toml` (or merge the generated hook tables into an existing config). The generated config disables Codex's built-in TUI notifications and uses Codex lifecycle hooks instead, so `grrr hook notify --codex` receives Codex's hook JSON and can include details such as the final assistant message, requested tool, command, or permission reason.
 
