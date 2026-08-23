@@ -170,9 +170,7 @@ extension Growlrrr {
             }
 
             // Validate app ID
-            let validNameRegex = try! NSRegularExpression(pattern: "^[a-zA-Z][a-zA-Z0-9_-]*$")
-            let nameRange = NSRange(resolvedName.startIndex..., in: resolvedName)
-            guard validNameRegex.firstMatch(in: resolvedName, range: nameRange) != nil else {
+            guard CustomAppBundle.isValidAppName(resolvedName) else {
                 fputs("Error: --appId must start with a letter and contain only letters, numbers, hyphens, or underscores\n", stderr)
                 throw ExitCode(1)
             }
@@ -839,25 +837,44 @@ extension Growlrrr {
     struct Init: ParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "init",
-            abstract: "Output shell hooks for automatic long-running command notifications"
+            abstract: "Output shell hooks or agent notification configuration"
         )
 
         @Option(name: .long, help: "Shell type (zsh or bash). Auto-detected from $SHELL if omitted.")
         var shell: String?
 
-        @Option(name: .long, help: "Output format (claude-code for Claude Code hooks JSON)")
+        @Option(name: .long, help: "Output format (claude or codex; claude-code is an alias for claude)")
         var format: String?
 
+        @Option(
+            name: .customLong("appId"),
+            help: "Custom app to target in generated Claude Code or Codex config"
+        )
+        var appId: String?
+
         func run() throws {
-            if let format = format?.lowercased() {
-                switch format {
-                case "claude-code":
-                    print(Self.claudeCodeHooksJSON())
-                default:
-                    fputs("Error: Unknown format '\(format)'. Supported: claude-code\n", stderr)
+            if let format {
+                guard let canonicalFormat = InitFormat.canonicalName(for: format) else {
+                    fputs("Error: Unknown format '\(format)'. Supported: claude, codex\n", stderr)
                     throw ExitCode(1)
                 }
+
+                if let appId, !CustomAppBundle.isValidAppName(appId) {
+                    fputs("Error: --appId must start with a letter and contain only letters, numbers, hyphens, or underscores\n", stderr)
+                    throw ExitCode(1)
+                }
+
+                if canonicalFormat == "claude" {
+                    print(InitFormat.claudeCodeHooksJSON(appId: appId))
+                } else {
+                    print(InitFormat.codexConfigTOML(appId: appId))
+                }
                 return
+            }
+
+            if appId != nil {
+                fputs("Error: --appId requires --format claude or --format codex\n", stderr)
+                throw ExitCode(1)
             }
 
             let resolved = try resolveShell()
@@ -890,47 +907,6 @@ extension Growlrrr {
             if base == "bash" { return "bash" }
             fputs("Error: Unsupported shell '\(base)'. Supported: zsh, bash\n", stderr)
             throw ExitCode(1)
-        }
-
-        // MARK: - Claude Code Hooks JSON
-
-        static func claudeCodeHooksJSON() -> String {
-            return """
-            {
-              "hooks": {
-                "Stop": [
-                  {
-                    "hooks": [
-                      {
-                        "type": "command",
-                        "command": "grrr hook notify"
-                      }
-                    ]
-                  }
-                ],
-                "Notification": [
-                  {
-                    "hooks": [
-                      {
-                        "type": "command",
-                        "command": "grrr hook notify"
-                      }
-                    ]
-                  }
-                ],
-                "UserPromptSubmit": [
-                  {
-                    "hooks": [
-                      {
-                        "type": "command",
-                        "command": "grrr hook dismiss"
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-            """
         }
 
         // MARK: - Zsh Hook Script

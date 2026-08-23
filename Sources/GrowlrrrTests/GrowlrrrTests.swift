@@ -3,6 +3,15 @@ import GrowlrrrCore
 
 final class GrowlrrrTests: XCTestCase {
 
+    func testCustomAppNameValidation() {
+        XCTAssertTrue(CustomAppBundle.isValidAppName("Codex"))
+        XCTAssertTrue(CustomAppBundle.isValidAppName("My_App-2"))
+        XCTAssertFalse(CustomAppBundle.isValidAppName(""))
+        XCTAssertFalse(CustomAppBundle.isValidAppName("2Codex"))
+        XCTAssertFalse(CustomAppBundle.isValidAppName("Codex App"))
+        XCTAssertFalse(CustomAppBundle.isValidAppName("Codex;open"))
+    }
+
     // MARK: - SoundOption Tests
 
     func testSoundOptionFromNil() {
