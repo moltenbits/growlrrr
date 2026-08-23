@@ -2,6 +2,20 @@ import GrowlrrrCore
 import XCTest
 
 final class InitFormatTests: XCTestCase {
+  func testCanonicalFormatNameRecognizesClaude() {
+    XCTAssertEqual(InitFormat.canonicalName(for: "claude"), "claude")
+  }
+
+  func testCanonicalFormatNameTreatsClaudeCodeAsClaudeAlias() {
+    XCTAssertEqual(InitFormat.canonicalName(for: "claude-code"), "claude")
+    XCTAssertEqual(InitFormat.canonicalName(for: "CLAUDE-CODE"), "claude")
+  }
+
+  func testCanonicalFormatNameRecognizesCodexAndRejectsUnknownFormats() {
+    XCTAssertEqual(InitFormat.canonicalName(for: "codex"), "codex")
+    XCTAssertNil(InitFormat.canonicalName(for: "unknown"))
+  }
+
   func testClaudeCodeFormatOutputsHooksJSON() {
     let output = InitFormat.claudeCodeHooksJSON()
 

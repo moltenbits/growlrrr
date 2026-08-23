@@ -1,4 +1,15 @@
 public enum InitFormat {
+  public static func canonicalName(for value: String) -> String? {
+    switch value.lowercased() {
+    case "claude", "claude-code":
+      return "claude"
+    case "codex":
+      return "codex"
+    default:
+      return nil
+    }
+  }
+
   public static func claudeCodeHooksJSON(appId: String? = nil) -> String {
     let appArgument = customAppArgument(appId)
 

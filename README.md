@@ -248,13 +248,15 @@ growlrrr integrates with [Claude Code](https://docs.anthropic.com/en/docs/claude
 Generate the hooks configuration:
 
 ```bash
-grrr init --format claude-code
+grrr init --format claude
 ```
+
+The legacy format name `claude-code` remains available as an alias for `claude`.
 
 To route the hooks through an existing custom growlrrr app, include its app ID:
 
 ```bash
-grrr init --format claude-code --appId MyAppName
+grrr init --format claude --appId MyAppName
 ```
 
 The generated notify and dismiss commands will both include `--appId MyAppName`. Create the custom app first with `grrr apps add`.

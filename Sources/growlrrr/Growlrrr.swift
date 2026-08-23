@@ -843,7 +843,7 @@ extension Growlrrr {
         @Option(name: .long, help: "Shell type (zsh or bash). Auto-detected from $SHELL if omitted.")
         var shell: String?
 
-        @Option(name: .long, help: "Output format (claude-code for Claude Code hooks JSON, codex for Codex config TOML)")
+        @Option(name: .long, help: "Output format (claude or codex; claude-code is an alias for claude)")
         var format: String?
 
         @Option(
@@ -853,9 +853,9 @@ extension Growlrrr {
         var appId: String?
 
         func run() throws {
-            if let format = format?.lowercased() {
-                guard format == "claude-code" || format == "codex" else {
-                    fputs("Error: Unknown format '\(format)'. Supported: claude-code, codex\n", stderr)
+            if let format {
+                guard let canonicalFormat = InitFormat.canonicalName(for: format) else {
+                    fputs("Error: Unknown format '\(format)'. Supported: claude, codex\n", stderr)
                     throw ExitCode(1)
                 }
 
@@ -864,7 +864,7 @@ extension Growlrrr {
                     throw ExitCode(1)
                 }
 
-                if format == "claude-code" {
+                if canonicalFormat == "claude" {
                     print(InitFormat.claudeCodeHooksJSON(appId: appId))
                 } else {
                     print(InitFormat.codexConfigTOML(appId: appId))
@@ -873,7 +873,7 @@ extension Growlrrr {
             }
 
             if appId != nil {
-                fputs("Error: --appId requires --format claude-code or --format codex\n", stderr)
+                fputs("Error: --appId requires --format claude or --format codex\n", stderr)
                 throw ExitCode(1)
             }
 
