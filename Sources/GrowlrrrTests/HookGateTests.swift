@@ -73,17 +73,17 @@ final class HookGateTests: XCTestCase {
 
   func testEvaluationLeavesSigpipeDispositionUnchanged() {
     var before = sigaction()
-    sigaction(SIGPIPE, nil, &before)
+    XCTAssertEqual(sigaction(SIGPIPE, nil, &before), 0)
 
     // A gate that exits without reading a large stdin makes our write hit EPIPE.
     XCTAssertEqual(
       HookGate.evaluate(command: "exit 1", input: Data(repeating: 0x78, count: 1 << 20)), .skip)
 
     var after = sigaction()
-    sigaction(SIGPIPE, nil, &after)
+    XCTAssertEqual(sigaction(SIGPIPE, nil, &after), 0)
     XCTAssertEqual(
-      unsafeBitCast(before.__sigaction_u, to: Int.self),
-      unsafeBitCast(after.__sigaction_u, to: Int.self),
+      unsafeBitCast(before.__sigaction_u.__sa_handler, to: UInt.self),
+      unsafeBitCast(after.__sigaction_u.__sa_handler, to: UInt.self),
       "evaluate must not change the process-wide SIGPIPE handler")
   }
 
