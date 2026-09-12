@@ -852,6 +852,12 @@ extension Growlrrr {
         )
         var appId: String?
 
+        @Option(
+            name: .long,
+            help: "Gate command to put on every generated hook line (see 'grrr hook notify --help')"
+        )
+        var gate: String?
+
         func run() throws {
             if let format {
                 guard let canonicalFormat = InitFormat.canonicalName(for: format) else {
@@ -865,15 +871,20 @@ extension Growlrrr {
                 }
 
                 if canonicalFormat == "claude" {
-                    print(InitFormat.claudeCodeHooksJSON(appId: appId))
+                    print(InitFormat.claudeCodeHooksJSON(appId: appId, gate: gate))
                 } else {
-                    print(InitFormat.codexConfigTOML(appId: appId))
+                    print(InitFormat.codexConfigTOML(appId: appId, gate: gate))
                 }
                 return
             }
 
             if appId != nil {
                 fputs("Error: --appId requires --format claude or --format codex\n", stderr)
+                throw ExitCode(1)
+            }
+
+            if gate != nil {
+                fputs("Error: --gate requires --format claude or --format codex\n", stderr)
                 throw ExitCode(1)
             }
 
