@@ -68,15 +68,23 @@ final class InitFormatGateTests: XCTestCase {
   func testClaudeCodeFormatPutsGateOnEveryHookLine() {
     let output = InitFormat.claudeCodeHooksJSON(appId: "Sideband", gate: "sideband hook notify")
 
-    let notifyLines = output.components(separatedBy: "\n").filter { $0.contains("grrr hook notify") }
-    let dismissLines = output.components(separatedBy: "\n").filter { $0.contains("grrr hook dismiss") }
+    let notifyLines = output.components(separatedBy: "\n").filter {
+      $0.contains("grrr hook notify")
+    }
+    let dismissLines = output.components(separatedBy: "\n").filter {
+      $0.contains("grrr hook dismiss")
+    }
     XCTAssertEqual(notifyLines.count, 2)
     XCTAssertEqual(dismissLines.count, 1)
     for line in notifyLines {
-      XCTAssertTrue(line.contains(#""command": "grrr hook notify --appId Sideband --gate 'sideband hook notify'""#), line)
+      XCTAssertTrue(
+        line.contains(
+          #""command": "grrr hook notify --appId Sideband --gate 'sideband hook notify'""#), line)
     }
     for line in dismissLines {
-      XCTAssertTrue(line.contains(#""command": "grrr hook dismiss --appId Sideband --gate 'sideband hook notify'""#), line)
+      XCTAssertTrue(
+        line.contains(
+          #""command": "grrr hook dismiss --appId Sideband --gate 'sideband hook notify'""#), line)
     }
   }
 
@@ -89,15 +97,22 @@ final class InitFormatGateTests: XCTestCase {
   func testCodexFormatPutsGateOnEveryHookLine() {
     let output = InitFormat.codexConfigTOML(appId: "Sideband", gate: "sideband hook notify")
 
-    let notifyLines = output.components(separatedBy: "\n").filter { $0.contains("grrr hook notify") }
-    let dismissLines = output.components(separatedBy: "\n").filter { $0.contains("grrr hook dismiss") }
+    let notifyLines = output.components(separatedBy: "\n").filter {
+      $0.contains("grrr hook notify")
+    }
+    let dismissLines = output.components(separatedBy: "\n").filter {
+      $0.contains("grrr hook dismiss")
+    }
     XCTAssertEqual(notifyLines.count, 2)
     XCTAssertEqual(dismissLines.count, 1)
     for line in notifyLines {
-      XCTAssertEqual(line, #"command = "grrr hook notify --codex --appId Sideband --gate 'sideband hook notify'""#)
+      XCTAssertEqual(
+        line,
+        #"command = "grrr hook notify --codex --appId Sideband --gate 'sideband hook notify'""#)
     }
     for line in dismissLines {
-      XCTAssertEqual(line, #"command = "grrr hook dismiss --appId Sideband --gate 'sideband hook notify'""#)
+      XCTAssertEqual(
+        line, #"command = "grrr hook dismiss --appId Sideband --gate 'sideband hook notify'""#)
     }
   }
 

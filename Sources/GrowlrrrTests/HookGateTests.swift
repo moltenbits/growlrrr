@@ -12,7 +12,9 @@ final class HookGateTests: XCTestCase {
   }
 
   func testOtherExitCodeProceedsWithWarning() {
-    guard case .proceedWithWarning(let warning) = HookGate.evaluate(command: "exit 3", input: Data()) else {
+    guard
+      case .proceedWithWarning(let warning) = HookGate.evaluate(command: "exit 3", input: Data())
+    else {
       return XCTFail("expected proceedWithWarning")
     }
     XCTAssertTrue(warning.contains("3"), "warning should name the exit code: \(warning)")
@@ -43,8 +45,10 @@ final class HookGateTests: XCTestCase {
     XCTAssertEqual(decision, .proceed)
     XCTAssertEqual(try String(contentsOf: stdoutCapture), "")
     let stderrText = try String(contentsOf: stderrCapture)
-    XCTAssertTrue(stderrText.contains("to-stdout"), "gate stdout should be diverted to stderr: \(stderrText)")
-    XCTAssertTrue(stderrText.contains("to-stderr"), "gate stderr should stay on stderr: \(stderrText)")
+    XCTAssertTrue(
+      stderrText.contains("to-stdout"), "gate stdout should be diverted to stderr: \(stderrText)")
+    XCTAssertTrue(
+      stderrText.contains("to-stderr"), "gate stderr should stay on stderr: \(stderrText)")
   }
 
   func testLargeStdoutBeforeReadingLargeStdinDoesNotDeadlock() throws {
@@ -53,7 +57,8 @@ final class HookGateTests: XCTestCase {
     let stdoutCapture = temporaryFile()
     let stderrCapture = temporaryFile()
     // Write 1 MiB to stdout before touching stdin, then consume stdin and count it.
-    let command = "head -c \(megabyte) /dev/zero; n=$(wc -c | tr -d ' '); [ \"$n\" -eq \(megabyte) ]"
+    let command =
+      "head -c \(megabyte) /dev/zero; n=$(wc -c | tr -d ' '); [ \"$n\" -eq \(megabyte) ]"
     let decision = try withRedirectedStandardStreams(stdout: stdoutCapture, stderr: stderrCapture) {
       HookGate.evaluate(command: command, input: input)
     }
@@ -78,7 +83,9 @@ final class HookGateTests: XCTestCase {
 
   /// Runs `body` with the process's fd 1 and fd 2 pointed at the given files,
   /// restoring the originals afterwards.
-  private func withRedirectedStandardStreams<T>(stdout: URL, stderr: URL, _ body: () -> T) throws -> T {
+  private func withRedirectedStandardStreams<T>(stdout: URL, stderr: URL, _ body: () -> T) throws
+    -> T
+  {
     fflush(Darwin.stdout)
     fflush(Darwin.stderr)
     let savedOut = dup(STDOUT_FILENO)
