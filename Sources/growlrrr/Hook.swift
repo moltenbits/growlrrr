@@ -11,6 +11,20 @@ extension Growlrrr {
             abstract: "Commands designed for use as tool hooks (e.g. Claude Code)",
             subcommands: [Notify.self, Dismiss.self]
         )
+
+        /// Consults a `--gate` command. Returns false when the gate says to
+        /// skip; a broken gate warns on stderr and lets the work proceed.
+        static func passesGate(_ command: String, input: Data) -> Bool {
+            switch HookGate.evaluate(command: command, input: input) {
+            case .proceed:
+                return true
+            case .skip:
+                return false
+            case .proceedWithWarning(let warning):
+                fputs("\(warning)\n", stderr)
+                return true
+            }
+        }
     }
 }
 
@@ -44,7 +58,31 @@ extension Growlrrr.Hook {
         @Flag(name: .long, help: "Parse stdin as Codex hook JSON")
         var codex: Bool = false
 
+        @Option(
+            name: .long,
+            help: ArgumentHelp(
+                "Command to consult before sending; exit 0 sends, 1 skips quietly, anything else sends with a warning",
+                discussion: "Runs through /bin/sh -c with this command's stdin piped to it. Its stdout is diverted to stderr."))
+        var gate: String?
+
         func run() async throws {
+            // Read stdin up front so the gate sees the same bytes we do.
+            // See HookStdinPolicy for when --message lets us skip it.
+            let stdinData: Data
+            if HookStdinPolicy.shouldRead(
+                hasMessage: message != nil, hasGate: gate != nil, isTerminal: isatty(STDIN_FILENO) != 0)
+            {
+                stdinData = FileHandle.standardInput.readDataToEndOfFile()
+            } else {
+                stdinData = Data()
+            }
+
+            // The gate runs once, here, before any --appId re-execution; the
+            // inner invocation is a plain `send` and never sees --gate.
+            if let gate, !Growlrrr.Hook.passesGate(gate, input: stdinData) {
+                return
+            }
+
             let subtitle: String?
             let resolvedMessage: String
             let stdinSessionId: String?
@@ -53,11 +91,9 @@ extension Growlrrr.Hook {
                 resolvedMessage = message
                 stdinSessionId = nil
             } else {
-                // Read JSON from stdin (blocks until EOF).
                 // Supports two schemas:
                 //   Stop event:         {"hook_event_name":"Stop", "last_assistant_message":"..."}
                 //   Notification event: {"title":"...", "message":"..."}
-                let stdinData = FileHandle.standardInput.readDataToEndOfFile()
                 guard !stdinData.isEmpty else {
                     fputs("Error: No input on stdin. Pipe JSON with title/message fields.\n", stderr)
                     throw ExitCode(1)
@@ -181,15 +217,29 @@ extension Growlrrr.Hook {
         @Option(name: .customLong("appId"), help: "Custom app to clear from")
         var appId: String?
 
+        @Option(
+            name: .long,
+            help: ArgumentHelp(
+                "Command to consult before clearing; exit 0 clears, 1 leaves the notification alone, anything else clears with a warning",
+                discussion: "Runs through /bin/sh -c with this command's stdin piped to it. Its stdout is diverted to stderr."))
+        var gate: String?
+
         func run() async throws {
             // Claude Code pipes hook JSON on stdin; skip it when run from a
             // terminal so a manual invocation doesn't block waiting for EOF.
+            var stdinData = Data()
             var stdinSessionId: String? = nil
             if isatty(STDIN_FILENO) == 0 {
-                let stdinData = FileHandle.standardInput.readDataToEndOfFile()
+                stdinData = FileHandle.standardInput.readDataToEndOfFile()
                 if let json = try? JSONSerialization.jsonObject(with: stdinData) as? [String: Any] {
                     stdinSessionId = json["session_id"] as? String
                 }
+            }
+
+            // The gate runs once, here; the --appId path below execs a plain
+            // `clear` in the custom bundle and never sees --gate.
+            if let gate, !Growlrrr.Hook.passesGate(gate, input: stdinData) {
+                return
             }
 
             let sessionId = HookSession.derive(

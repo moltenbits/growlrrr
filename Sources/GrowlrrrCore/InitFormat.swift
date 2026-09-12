@@ -10,8 +10,8 @@ public enum InitFormat {
     }
   }
 
-  public static func claudeCodeHooksJSON(appId: String? = nil) -> String {
-    let appArgument = customAppArgument(appId)
+  public static func claudeCodeHooksJSON(appId: String? = nil, gate: String? = nil) -> String {
+    let appArgument = customAppArgument(appId) + gateArgument(gate)
 
     return """
       {
@@ -51,8 +51,8 @@ public enum InitFormat {
       """
   }
 
-  public static func codexConfigTOML(appId: String? = nil) -> String {
-    let appArgument = customAppArgument(appId)
+  public static func codexConfigTOML(appId: String? = nil, gate: String? = nil) -> String {
+    let appArgument = customAppArgument(appId) + gateArgument(gate)
 
     return """
       # Add this to ~/.codex/config.toml
@@ -85,5 +85,36 @@ public enum InitFormat {
   private static func customAppArgument(_ appId: String?) -> String {
     guard let appId else { return "" }
     return " --appId \(appId)"
+  }
+
+  /// `--gate '<command>'`, single-quoted for the shell the host runs hooks in.
+  /// A literal single quote becomes `'\''`. The result is then encoded for the
+  /// double-quoted string it is embedded in, so the config stays valid.
+  private static func gateArgument(_ gate: String?) -> String {
+    guard let gate else { return "" }
+    let shellQuoted = "'" + gate.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    return " --gate \(escapedForQuotedString(shellQuoted))"
+  }
+
+  /// Escapes `text` so it can sit inside a JSON string or a TOML basic string.
+  /// Both formats share these escapes: `\\`, `\"`, `\b`, `\t`, `\n`, `\f`,
+  /// `\r`, and `\uXXXX` for the remaining control characters.
+  private static func escapedForQuotedString(_ text: String) -> String {
+    var out = ""
+    for scalar in text.unicodeScalars {
+      switch scalar {
+      case "\\": out += "\\\\"
+      case "\"": out += "\\\""
+      case "\u{08}": out += "\\b"
+      case "\t": out += "\\t"
+      case "\n": out += "\\n"
+      case "\u{0C}": out += "\\f"
+      case "\r": out += "\\r"
+      case _ where scalar.value < 0x20 || scalar.value == 0x7F:
+        out += String(format: "\\u%04X", scalar.value)
+      default: out.unicodeScalars.append(scalar)
+      }
+    }
+    return out
   }
 }
