@@ -269,6 +269,22 @@ Copy the output into your project's `.claude/settings.json` (or merge into an ex
 
 The notification identifiers are derived from `--appId` (or `GROWLRRR_SESSION_ID`), so each terminal session's notifications are managed independently. The shell hooks from `grrr init` will also dismiss Claude Code notifications when you return to a regular shell prompt.
 
+#### Gating notifications
+
+Not every turn end deserves a notification. If Claude Code is driven by another tool (a peer agent pushing messages into the session, for instance), `--gate` lets an external command decide whether a hook should act. growlrrr runs the gate through `/bin/sh -c` before doing anything, with the hook JSON it received on stdin piped to the gate's stdin, and reads the exit code:
+
+- **0** — proceed: send the notification, or clear it for `dismiss`
+- **1** — do nothing, exit 0 quietly
+- **anything else**, or a gate that cannot be started — proceed and print a one-line warning to stderr, so a broken gate never silences you
+
+The gate's stdout is diverted to stderr, since Claude Code parses a hook's stdout. With `--appId`, the gate runs once in the outer process before growlrrr re-executes itself from the custom app bundle.
+
+Pass `--gate` to `grrr init` to put it on every generated hook line. [Sideband](https://github.com/moltenbits/sideband), which lets Claude Code and Codex delegate to each other, ships a gate that answers from its journal whether a turn end is the operator's business:
+
+```bash
+grrr init --format claude --appId Sideband --gate "sideband hook notify"
+```
+
 ### Codex integration
 
 growlrrr can also generate Codex configuration for native macOS notifications:
@@ -295,6 +311,12 @@ This configures three hooks:
 
 User-level `~/.codex/config.toml` hooks work across projects. Project `.codex/config.toml` hooks can also work, but only after the project is trusted and the hook has been reviewed in Codex.
 
+`--gate` works the same way as for Claude Code (see [Gating notifications](#gating-notifications)): the gate command gets Codex's hook JSON on stdin, exit 0 proceeds, exit 1 skips quietly, and any other outcome proceeds with a warning. To put a gate on every generated line:
+
+```bash
+grrr init --format codex --appId Sideband --gate "sideband hook notify"
+```
+
 #### Hook Options
 
 `grrr hook notify` accepts options to customize behavior:
@@ -308,6 +330,7 @@ User-level `~/.codex/config.toml` hooks work across projects. Project `.codex/co
 | `--appId` | Use a custom app (create with `grrr apps add`) | _(none)_ |
 | `--reactivate` / `--no-reactivate` | Reactivate terminal on click | `--reactivate` |
 | `--replace` | Replace any existing hook notification instead of stacking | `false` |
+| `--gate` | Command run first with the hook JSON on stdin; exit 0 proceeds, 1 skips quietly, other codes proceed with a warning. Also accepted by `grrr hook dismiss` | _(none)_ |
 
 ### Activate notifications via keyboard shortcut
 
