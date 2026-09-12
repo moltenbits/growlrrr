@@ -67,10 +67,11 @@ extension Growlrrr.Hook {
 
         func run() async throws {
             // Read stdin up front so the gate sees the same bytes we do. With
-            // --message the JSON is optional, so only read when something is
-            // piped in; a terminal would otherwise block waiting for EOF.
+            // --message the JSON is optional and is normally ignored, so only
+            // consume it when a gate needs the bytes and something is piped in;
+            // otherwise a held-open pipe (or a terminal) would block on EOF.
             let stdinData: Data
-            if message == nil || isatty(STDIN_FILENO) == 0 {
+            if message == nil || (gate != nil && isatty(STDIN_FILENO) == 0) {
                 stdinData = FileHandle.standardInput.readDataToEndOfFile()
             } else {
                 stdinData = Data()

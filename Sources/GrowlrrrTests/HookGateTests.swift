@@ -71,6 +71,33 @@ final class HookGateTests: XCTestCase {
     XCTAssertEqual(HookGate.evaluate(command: "exit 1", input: input), .skip)
   }
 
+  func testEvaluationLeavesSigpipeDispositionUnchanged() {
+    var before = sigaction()
+    sigaction(SIGPIPE, nil, &before)
+
+    // A gate that exits without reading a large stdin makes our write hit EPIPE.
+    XCTAssertEqual(
+      HookGate.evaluate(command: "exit 1", input: Data(repeating: 0x78, count: 1 << 20)), .skip)
+
+    var after = sigaction()
+    sigaction(SIGPIPE, nil, &after)
+    XCTAssertEqual(
+      unsafeBitCast(before.__sigaction_u, to: Int.self),
+      unsafeBitCast(after.__sigaction_u, to: Int.self),
+      "evaluate must not change the process-wide SIGPIPE handler")
+  }
+
+  func testWarningStaysOnOneLineForMultilineCommand() {
+    guard
+      case .proceedWithWarning(let warning) = HookGate.evaluate(
+        command: "true\nexit 3", input: Data())
+    else {
+      return XCTFail("expected proceedWithWarning")
+    }
+    XCTAssertFalse(warning.contains("\n"), warning)
+    XCTAssertTrue(warning.contains("exited 3"), warning)
+  }
+
   // MARK: - Helpers
 
   private func temporaryFile() -> URL {

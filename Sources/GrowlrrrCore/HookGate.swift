@@ -33,15 +33,17 @@ public enum HookGate {
       try process.run()
     } catch {
       return .proceedWithWarning(
-        "Warning: could not start gate '\(command)': \(error.localizedDescription); proceeding")
+        "Warning: could not start gate '\(displayable(command))': \(error.localizedDescription); proceeding"
+      )
     }
 
     // Feed stdin off the main thread so a gate that exits without reading a
     // large input cannot block us, and so waiting for exit never waits on the
-    // write. A gate that exits early closes the read end; the write then
-    // fails with EPIPE instead of killing us, since SIGPIPE is ignored.
-    signal(SIGPIPE, SIG_IGN)
+    // write. A gate that exits early closes the read end; F_SETNOSIGPIPE makes
+    // the write fail with EPIPE on this descriptor alone instead of raising
+    // SIGPIPE, so the process-wide signal disposition is left untouched.
     let writer = stdinPipe.fileHandleForWriting
+    _ = fcntl(writer.fileDescriptor, F_SETNOSIGPIPE, 1)
     let feeder = Thread {
       if !input.isEmpty {
         try? writer.write(contentsOf: input)
@@ -59,7 +61,24 @@ public enum HookGate {
       return .skip
     case let status:
       return .proceedWithWarning(
-        "Warning: gate '\(command)' exited \(status); proceeding")
+        "Warning: gate '\(displayable(command))' exited \(status); proceeding")
     }
+  }
+
+  /// The command as it can appear inside a one-line warning: control
+  /// characters are shown as escapes so a multiline gate cannot wrap the line.
+  private static func displayable(_ command: String) -> String {
+    var out = ""
+    for scalar in command.unicodeScalars {
+      switch scalar {
+      case "\n": out += "\\n"
+      case "\r": out += "\\r"
+      case "\t": out += "\\t"
+      case _ where scalar.value < 0x20 || scalar.value == 0x7F:
+        out += String(format: "\\u%04X", scalar.value)
+      default: out.unicodeScalars.append(scalar)
+      }
+    }
+    return out
   }
 }

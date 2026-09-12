@@ -133,6 +133,24 @@ final class InitFormatGateTests: XCTestCase {
     XCTAssertTrue(codex.contains(#"--gate 'echo it'\\''s'"#), codex)
   }
 
+  func testGateWithControlCharactersProducesValidJSON() throws {
+    let gate = "true\nexit 0\ttab \"quoted\" back\\slash"
+    let claude = InitFormat.claudeCodeHooksJSON(gate: gate)
+
+    let json = try XCTUnwrap(
+      try JSONSerialization.jsonObject(with: Data(claude.utf8)) as? [String: Any])
+    let hooks = try XCTUnwrap(json["hooks"] as? [String: Any])
+    let stop = try XCTUnwrap(hooks["Stop"] as? [[String: Any]])
+    let entry = try XCTUnwrap((stop.first?["hooks"] as? [[String: Any]])?.first)
+    XCTAssertEqual(entry["command"] as? String, "grrr hook notify --gate '\(gate)'")
+  }
+
+  func testGateWithControlCharactersIsEscapedForTOML() {
+    let codex = InitFormat.codexConfigTOML(gate: "a\nb\tc\rd\u{7f}e")
+    let line = codex.components(separatedBy: "\n").first { $0.contains("grrr hook dismiss") }
+    XCTAssertEqual(line, #"command = "grrr hook dismiss --gate 'a\nb\tc\rd\u007Fe'""#)
+  }
+
   func testGateOnlyChangesHookCommandLines() {
     let plain = InitFormat.codexConfigTOML(appId: "Sideband")
     let gated = InitFormat.codexConfigTOML(appId: "Sideband", gate: "g")
