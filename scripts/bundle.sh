@@ -32,9 +32,28 @@ fi
 
 echo "Building $APP_NAME ($BUILD_CONFIG)..."
 
-# Build the executable
+# Build the executable.
+#
+# Release builds are universal (arm64 + x86_64) so a single archive runs on
+# both Apple Silicon and Intel Macs. Each slice is built with the native
+# SwiftPM build system via --triple and then combined with lipo, rather than
+# passing multiple --arch flags. Multi-arch builds route through the Xcode
+# build system, which does not suppress compiler warnings from dependencies.
+# Debug builds stay native for speed.
 cd "$PROJECT_DIR"
-swift build -c "$BUILD_CONFIG"
+if [[ "$BUILD_CONFIG" == "release" ]]; then
+    SLICES=()
+    for TRIPLE in arm64-apple-macosx x86_64-apple-macosx; do
+        swift build -c "$BUILD_CONFIG" --triple "$TRIPLE"
+        SLICES+=("$(swift build -c "$BUILD_CONFIG" --triple "$TRIPLE" --show-bin-path)/$APP_NAME")
+    done
+    BIN_DIR="$BUILD_DIR/universal/$BUILD_CONFIG"
+    mkdir -p "$BIN_DIR"
+    lipo -create -output "$BIN_DIR/$APP_NAME" "${SLICES[@]}"
+else
+    swift build -c "$BUILD_CONFIG"
+    BIN_DIR="$(swift build -c "$BUILD_CONFIG" --show-bin-path)"
+fi
 
 # Create app bundle structure
 APP_BUNDLE="$BUILD_DIR/$BUILD_CONFIG/$APP_NAME.app"
@@ -49,7 +68,7 @@ mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DEST"
 
 # Copy executable
-cp "$BUILD_DIR/$BUILD_CONFIG/$APP_NAME" "$MACOS_DIR/$APP_NAME"
+cp "$BIN_DIR/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 
 # Copy Info.plist
 cp "$RESOURCES_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
