@@ -104,6 +104,7 @@ public struct DeliveredNotificationDetail: Codable {
 
 public enum GrowlrrrError: Error, LocalizedError, CustomStringConvertible {
     case authorizationDenied
+    case authorizationNotDetermined
     case notificationFailed(String)
     case timeout
     case invalidUrl(String)
@@ -113,6 +114,8 @@ public enum GrowlrrrError: Error, LocalizedError, CustomStringConvertible {
         switch self {
         case .authorizationDenied:
             return "Notification permission denied. Please enable notifications in System Settings > Notifications."
+        case .authorizationNotDetermined:
+            return "Notifications not yet authorised. Run 'grrr authorize' once to grant permission."
         case .notificationFailed(let reason):
             return reason
         case .timeout:

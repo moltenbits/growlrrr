@@ -181,8 +181,14 @@ extension Growlrrr.Hook {
 
             let service = NotificationService()
 
+            // Check authorization without prompting -- hooks run in the background
+            // where a permission dialog would never be answered and would hang.
             do {
-                try await service.requestAuthorization()
+                try await service.ensureAuthorizedForSend()
+            } catch GrowlrrrError.authorizationNotDetermined {
+                fputs("Error: Notifications not yet authorised.\n", stderr)
+                fputs("Run 'growlrrr authorize' once to grant permission.\n", stderr)
+                throw ExitCode(1)
             } catch GrowlrrrError.authorizationDenied {
                 fputs("Error: Notification permission denied.\n", stderr)
                 fputs("Run: growlrrr authorize --open-settings\n", stderr)

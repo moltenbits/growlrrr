@@ -41,6 +41,51 @@ actor NotificationService {
         return settings.authorizationStatus
     }
 
+    /// Non-prompting authorization guard for the send path.
+    ///
+    /// Unlike `requestAuthorization()`, this NEVER presents the system permission
+    /// dialog. A backgrounded hook (`( grrr ... &>/dev/null & )`) has no one to
+    /// click the dialog, so prompting there would hang the process forever.
+    /// Instead we only read the current status and fail fast when notifications
+    /// are not already usable. The interactive prompt lives in `grrr authorize`.
+    func ensureAuthorizedForSend() async throws {
+        let status = await authorizationStatusWithTimeout(seconds: 3)
+
+        switch status {
+        case .authorized, .provisional, .ephemeral:
+            return
+        case .notDetermined:
+            throw GrowlrrrError.authorizationNotDetermined
+        case .denied:
+            throw GrowlrrrError.authorizationDenied
+        @unknown default:
+            // Fail safe: never prompt on an unknown status.
+            throw GrowlrrrError.authorizationDenied
+        }
+    }
+
+    /// Read the authorization status, but never wait longer than `seconds` on the
+    /// UserNotifications XPC round-trip. If `usernotificationsd` is wedged, treat
+    /// it as denied rather than letting a hook hang.
+    private func authorizationStatusWithTimeout(seconds: Double) async -> UNAuthorizationStatus {
+        await withTaskGroup(of: UNAuthorizationStatus?.self) { group in
+            group.addTask { [center] in
+                await center.notificationSettings().authorizationStatus
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return nil
+            }
+
+            defer { group.cancelAll() }
+            for await result in group {
+                // First task to finish wins; nil means the timeout fired first.
+                return result ?? .denied
+            }
+            return .denied
+        }
+    }
+
     func openNotificationSettings() async {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")

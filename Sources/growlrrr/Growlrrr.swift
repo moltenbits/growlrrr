@@ -545,9 +545,14 @@ extension Growlrrr {
 
             let service = NotificationService()
 
-            // Request authorization first
+            // Check authorization first -- never prompt here. Prompting on the send
+            // path would hang a backgrounded hook waiting on a dialog nobody clicks.
             do {
-                try await service.requestAuthorization()
+                try await service.ensureAuthorizedForSend()
+            } catch GrowlrrrError.authorizationNotDetermined {
+                fputs("Error: Notifications not yet authorised.\n", stderr)
+                fputs("Run 'growlrrr authorize' once to grant permission.\n", stderr)
+                throw ExitCode(1)
             } catch GrowlrrrError.authorizationDenied {
                 fputs("Error: Notification permission denied.\n", stderr)
                 fputs("To enable notifications, run:\n", stderr)

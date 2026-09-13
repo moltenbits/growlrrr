@@ -358,9 +358,46 @@ public enum CustomAppBundle {
         process.standardError = FileHandle.standardError
 
         try process.run()
-        process.waitUntilExit()
 
-        exit(process.terminationStatus)
+        // Defence in depth: the child runs the same send path, which now fails
+        // fast when unauthorised, so it should exit promptly. But never let a
+        // wedged child pin the parent (which a hook backgrounds) indefinitely.
+        // Terminate the child if it overruns the deadline.
+        if waitUntilExit(process, timeout: customAppTimeout) {
+            exit(process.terminationStatus)
+        }
+
+        process.terminate()
+        _ = waitUntilExit(process, timeout: 1)
+        FileHandle.standardError.write(Data(
+            "Error: custom app '\(appName)' timed out and was terminated\n".utf8))
+        exit(1)
+    }
+
+    /// How long to wait for a custom-app child before terminating it.
+    private static let customAppTimeout: TimeInterval = 5
+
+    /// Wait for `process` to exit, bounded by `timeout` seconds.
+    /// Returns true if the process exited within the deadline, false on timeout.
+    private static func waitUntilExit(_ process: Process, timeout: TimeInterval) -> Bool {
+        let group = DispatchGroup()
+        group.enter()
+        // terminationHandler fires on a background queue when the child exits.
+        let previousHandler = process.terminationHandler
+        process.terminationHandler = { proc in
+            previousHandler?(proc)
+            group.leave()
+        }
+
+        // If the process already exited before the handler was installed, the
+        // handler won't fire -- check and leave synchronously.
+        if !process.isRunning {
+            process.terminationHandler = previousHandler
+            return true
+        }
+
+        let result = group.wait(timeout: .now() + timeout)
+        return result == .success
     }
 
     // MARK: - Bundle ID Resolution
