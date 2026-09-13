@@ -32,9 +32,20 @@ fi
 
 echo "Building $APP_NAME ($BUILD_CONFIG)..."
 
+# Release builds are universal (arm64 + x86_64) so a single archive runs on
+# both Apple Silicon and Intel Macs. Debug builds stay native for speed.
+ARCH_FLAGS=()
+if [[ "$BUILD_CONFIG" == "release" ]]; then
+    ARCH_FLAGS=(--arch arm64 --arch x86_64)
+fi
+
 # Build the executable
 cd "$PROJECT_DIR"
-swift build -c "$BUILD_CONFIG"
+swift build -c "$BUILD_CONFIG" "${ARCH_FLAGS[@]}"
+
+# SwiftPM writes universal builds to .build/apple/Products/<Config>/ rather
+# than .build/<config>/, so ask it where the executable landed.
+BIN_DIR="$(swift build -c "$BUILD_CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
 
 # Create app bundle structure
 APP_BUNDLE="$BUILD_DIR/$BUILD_CONFIG/$APP_NAME.app"
@@ -49,7 +60,7 @@ mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DEST"
 
 # Copy executable
-cp "$BUILD_DIR/$BUILD_CONFIG/$APP_NAME" "$MACOS_DIR/$APP_NAME"
+cp "$BIN_DIR/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 
 # Copy Info.plist
 cp "$RESOURCES_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"

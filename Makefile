@@ -2,7 +2,8 @@
 
 # Build configuration
 SWIFT_BUILD_FLAGS = --disable-sandbox
-RELEASE_FLAGS = -c release $(SWIFT_BUILD_FLAGS)
+UNIVERSAL_ARCH_FLAGS = --arch arm64 --arch x86_64
+RELEASE_FLAGS = -c release $(UNIVERSAL_ARCH_FLAGS) $(SWIFT_BUILD_FLAGS)
 DEBUG_FLAGS = -c debug $(SWIFT_BUILD_FLAGS)
 APP_INSTALL_PATH = /Applications
 BIN_INSTALL_PATH = /usr/local/bin
@@ -29,7 +30,7 @@ all: bundle
 build: ## Build debug executable only (no app bundle)
 	swift build $(DEBUG_FLAGS)
 
-release: ## Build release executable only (no app bundle)
+release: ## Build universal (arm64 + x86_64) release executable only (no app bundle)
 	swift build $(RELEASE_FLAGS)
 
 bundle: ## Build debug app bundle
