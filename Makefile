@@ -2,8 +2,8 @@
 
 # Build configuration
 SWIFT_BUILD_FLAGS = --disable-sandbox
-UNIVERSAL_ARCH_FLAGS = --arch arm64 --arch x86_64
-RELEASE_FLAGS = -c release $(UNIVERSAL_ARCH_FLAGS) $(SWIFT_BUILD_FLAGS)
+RELEASE_FLAGS = -c release $(SWIFT_BUILD_FLAGS)
+UNIVERSAL_TRIPLES = arm64-apple-macosx x86_64-apple-macosx
 DEBUG_FLAGS = -c debug $(SWIFT_BUILD_FLAGS)
 APP_INSTALL_PATH = /Applications
 BIN_INSTALL_PATH = /usr/local/bin
@@ -31,7 +31,9 @@ build: ## Build debug executable only (no app bundle)
 	swift build $(DEBUG_FLAGS)
 
 release: ## Build universal (arm64 + x86_64) release executable only (no app bundle)
-	swift build $(RELEASE_FLAGS)
+	for triple in $(UNIVERSAL_TRIPLES); do swift build $(RELEASE_FLAGS) --triple $$triple || exit 1; done
+	mkdir -p .build/universal/release
+	lipo -create -output .build/universal/release/growlrrr $(foreach t,$(UNIVERSAL_TRIPLES),.build/$(t)/release/growlrrr)
 
 bundle: ## Build debug app bundle
 	./scripts/bundle.sh debug
