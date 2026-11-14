@@ -128,12 +128,6 @@ extension Growlrrr.Hook {
                 appId: appId)
             let identifier = replace ? "growlrrr-hook" : "growlrrr-hook-\(sessionId)"
 
-            // Build reactivate script
-            var executeCommand: String? = nil
-            if reactivate {
-                executeCommand = ReactivateScript.generate()
-            }
-
             // Handle custom app
             if let appId = appId {
                 guard CustomAppBundle.bundleExists(forAppName: appId) else {
@@ -165,6 +159,10 @@ extension Growlrrr.Hook {
                 }
                 return
             }
+
+            // Built here rather than before the custom-app branch: that
+            // branch re-runs `send --reactivate`, which builds its own.
+            let executeCommand = reactivate ? Reactivation().clickCommand(in: .live()) : nil
 
             let config = NotificationConfig(
                 message: resolvedMessage,
