@@ -4,9 +4,8 @@ import Foundation
 /// particular terminal, or a particular app that runs agents.
 ///
 /// To add a method, add a `final class` that conforms to this protocol
-/// anywhere in GrowlrrrCore. Nothing else needs editing: methods are found
-/// at runtime (see `ReactivationMethods.discover`). Conforming types must be
-/// classes because that is how they are found.
+/// anywhere in GrowlrrrCore. Every conforming class is found at runtime (see
+/// `ReactivationMethods.discover`), which is why methods are classes.
 public protocol ReactivationMethod: AnyObject {
     init()
 
