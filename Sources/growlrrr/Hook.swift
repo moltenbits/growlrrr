@@ -223,6 +223,11 @@ extension Growlrrr.Hook {
         var gate: String?
 
         func run() async throws {
+            // Created before anything slow: a prompt was just submitted, so
+            // the frontmost app it captures is the one the prompt was typed
+            // into.
+            let reactivationContext = ReactivationContext.live()
+
             // Claude Code pipes hook JSON on stdin; skip it when run from a
             // terminal so a manual invocation doesn't block waiting for EOF.
             var stdinData = Data()
@@ -239,6 +244,10 @@ extension Growlrrr.Hook {
             if let gate, !Growlrrr.Hook.passesGate(gate, input: stdinData) {
                 return
             }
+
+            // After the gate, so a prompt the gate says is not the
+            // operator's does not change where a click will lead.
+            Reactivation().promptSubmitted(in: reactivationContext)
 
             let sessionId = HookSession.derive(
                 environmentSessionId: ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"],
