@@ -252,7 +252,7 @@ The generated notify and dismiss commands will both include `--appId MyAppName`.
 
 Copy the output into your project's `.claude/settings.json` (or merge into an existing one). This configures three hooks:
 
-- **Stop** — runs `grrr hook notify` when Claude finishes responding
+- **Stop** — runs `grrr hook notify` when Claude finishes responding. The notification shows "Claude is waiting for your input" and the start of Claude's last message
 - **Notification** — runs `grrr hook notify` when Claude needs attention (permission prompts, idle checks, etc.)
 - **UserPromptSubmit** — runs `grrr hook dismiss`, which clears any outstanding notification for the current session
 
@@ -294,7 +294,7 @@ Copy the output into `~/.codex/config.toml` (or merge the generated hook tables 
 
 This configures three hooks:
 
-- **Stop** — runs `grrr hook notify --codex` when Codex finishes a turn, using `last_assistant_message` when available
+- **Stop** — runs `grrr hook notify --codex` when Codex finishes a turn. The notification shows "Codex is waiting for your input" and the start of Codex's last message
 - **PermissionRequest** — runs `grrr hook notify --codex` when Codex needs approval, using `tool_name`, `tool_input.description`, and `tool_input.command` when available
 - **UserPromptSubmit** — runs `grrr hook dismiss`, which clears any outstanding notification for the current session
 
@@ -314,7 +314,7 @@ grrr init --format codex --appId Sideband --gate "sideband hook notify"
 |--------|-------------|---------|
 | `--title`, `-t` | Notification title | `Growlrrr` |
 | `--message`, `-m` | Notification message; when set, stdin JSON is optional | _(from hook JSON)_ |
-| `--codex` | Parse stdin as Codex hook JSON | `false` |
+| `--codex` | The hook is run by Codex: the notification text names Codex instead of Claude | `false` |
 | `--sound` | Sound: `default`, `none`, or system sound name | `default` |
 | `--appId` | Use a custom app (create with `grrr apps add`) | _(none)_ |
 | `--reactivate` / `--no-reactivate` | Reactivate terminal on click | `--reactivate` |

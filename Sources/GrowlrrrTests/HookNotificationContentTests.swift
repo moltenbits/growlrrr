@@ -1,70 +1,143 @@
 import GrowlrrrCore
 import XCTest
 
+/// Claude Code and Codex hooks produce the same notification text; only the
+/// agent's name differs.
 final class HookNotificationContentTests: XCTestCase {
-  func testClaudeCodeStopPreservesExistingReadyMessage() {
-    let content = HookNotificationContentResolver.claudeCode(from: [
-      "hook_event_name": "Stop",
-      "session_id": "claude-session",
-      "last_assistant_message": "Done",
-    ])
+  private let agents: [(agent: HookAgent, name: String)] = [(.claudeCode, "Claude"), (.codex, "Codex")]
 
-    XCTAssertEqual(content.subtitle, nil)
-    XCTAssertEqual(content.message, "Claude is ready")
-    XCTAssertEqual(content.sessionId, "claude-session")
+  // MARK: - Stop
+
+  func testStopShowsTheLastAssistantMessageUnderAWaitingSubtitle() {
+    for (agent, name) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: [
+          "hook_event_name": "Stop",
+          "session_id": "session-1",
+          "last_assistant_message": "Implemented the change and tests pass.",
+        ],
+        agent: agent)
+
+      XCTAssertEqual(content.subtitle, "\(name) is waiting for your input")
+      XCTAssertEqual(content.message, "Implemented the change and tests pass.")
+      XCTAssertEqual(content.sessionId, "session-1")
+    }
   }
 
-  func testCodexStopUsesLastAssistantMessage() {
-    let content = HookNotificationContentResolver.codex(from: [
-      "hook_event_name": "Stop",
-      "session_id": "codex-session",
-      "last_assistant_message": "Implemented the change and tests pass.",
-    ])
+  func testStopWithoutAnAssistantMessageShowsOnlyTheWaitingLine() {
+    for (agent, name) in agents {
+      for json in [
+        ["hook_event_name": "Stop", "session_id": "session-1"],
+        ["hook_event_name": "Stop", "session_id": "session-1", "last_assistant_message": "  \n "],
+      ] {
+        let content = HookNotificationContentResolver.content(from: json, agent: agent)
 
-    XCTAssertEqual(content.subtitle, "Codex is waiting for your input")
-    XCTAssertEqual(content.message, "Implemented the change and tests pass.")
-    XCTAssertEqual(content.sessionId, "codex-session")
+        XCTAssertEqual(content.subtitle, nil)
+        XCTAssertEqual(content.message, "\(name) is waiting for your input")
+        XCTAssertEqual(content.sessionId, "session-1")
+      }
+    }
   }
 
-  func testCodexStopFallsBackWhenNoAssistantMessageExists() {
-    let content = HookNotificationContentResolver.codex(from: [
-      "hook_event_name": "Stop",
-      "session_id": "codex-session",
-    ])
+  func testStopPutsALongMessageOnOneLineAndCutsItAt240Characters() {
+    let longMessage = "First line.\nSecond line.\t" + String(repeating: "x", count: 300)
+    for (agent, _) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: ["hook_event_name": "Stop", "last_assistant_message": longMessage], agent: agent)
 
-    XCTAssertEqual(content.subtitle, nil)
-    XCTAssertEqual(content.message, "Codex is waiting for your input")
-    XCTAssertEqual(content.sessionId, "codex-session")
+      XCTAssertEqual(content.message.count, 240)
+      XCTAssertTrue(content.message.hasPrefix("First line. Second line. xxx"))
+      XCTAssertTrue(content.message.hasSuffix("..."))
+    }
   }
 
-  func testCodexPermissionRequestUsesDescription() {
-    let content = HookNotificationContentResolver.codex(from: [
-      "hook_event_name": "PermissionRequest",
-      "session_id": "codex-session",
-      "tool_name": "Bash",
-      "tool_input": [
-        "command": "git commit -m test",
-        "description": "Codex wants to create a git commit.",
-      ],
-    ])
+  // MARK: - PermissionRequest
 
-    XCTAssertEqual(content.subtitle, "Codex needs permission: Bash")
-    XCTAssertEqual(content.message, "Codex wants to create a git commit.")
-    XCTAssertEqual(content.sessionId, "codex-session")
+  func testPermissionRequestShowsTheReasonUnderTheToolName() {
+    for (agent, name) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: [
+          "hook_event_name": "PermissionRequest",
+          "session_id": "session-1",
+          "tool_name": "Bash",
+          "tool_input": [
+            "command": "git commit -m test",
+            "description": "Create a git commit.",
+          ],
+        ],
+        agent: agent)
+
+      XCTAssertEqual(content.subtitle, "\(name) needs permission: Bash")
+      XCTAssertEqual(content.message, "Create a git commit.")
+      XCTAssertEqual(content.sessionId, "session-1")
+    }
   }
 
-  func testCodexPermissionRequestFallsBackToCommand() {
-    let content = HookNotificationContentResolver.codex(from: [
-      "hook_event_name": "PermissionRequest",
-      "session_id": "codex-session",
-      "tool_name": "Bash",
-      "tool_input": [
-        "command": "git status --short",
-      ],
-    ])
+  func testPermissionRequestFallsBackToTheCommand() {
+    for (agent, name) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: [
+          "hook_event_name": "PermissionRequest",
+          "tool_name": "Bash",
+          "tool_input": ["command": "git status --short"],
+        ],
+        agent: agent)
 
-    XCTAssertEqual(content.subtitle, "Codex needs permission: Bash")
-    XCTAssertEqual(content.message, "git status --short")
-    XCTAssertEqual(content.sessionId, "codex-session")
+      XCTAssertEqual(content.subtitle, "\(name) needs permission: Bash")
+      XCTAssertEqual(content.message, "git status --short")
+    }
+  }
+
+  func testPermissionRequestWithoutDetailsStillSaysWhoIsAsking() {
+    for (agent, name) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: ["hook_event_name": "PermissionRequest"], agent: agent)
+
+      XCTAssertEqual(content.subtitle, "\(name) needs permission")
+      XCTAssertEqual(content.message, "\(name) wants permission to continue")
+    }
+  }
+
+  // MARK: - Other events
+
+  func testAnEventThatCarriesItsOwnTextShowsThatText() {
+    // Claude Code's Notification event: {"title": ..., "message": ...}.
+    for (agent, _) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: [
+          "hook_event_name": "Notification",
+          "session_id": "session-1",
+          "title": "Permission needed",
+          "message": "Claude needs your permission to use Bash",
+        ],
+        agent: agent)
+
+      XCTAssertEqual(content.subtitle, "Permission needed")
+      XCTAssertEqual(content.message, "Claude needs your permission to use Bash")
+      XCTAssertEqual(content.sessionId, "session-1")
+    }
+  }
+
+  func testAnEventWithOnlyAMessageHasNoSubtitle() {
+    for (agent, _) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: ["hook_event_name": "Notification", "message": "Claude is waiting for your input"],
+        agent: agent)
+
+      XCTAssertEqual(content.subtitle, nil)
+      XCTAssertEqual(content.message, "Claude is waiting for your input")
+    }
+  }
+
+  func testAnEventWithNoTextFallsBackToTheWaitingLine() {
+    for (agent, name) in agents {
+      for json in [["hook_event_name": "Notification"], [:]] {
+        let content = HookNotificationContentResolver.content(from: json, agent: agent)
+
+        XCTAssertEqual(content.subtitle, nil)
+        XCTAssertEqual(content.message, "\(name) is waiting for your input")
+        XCTAssertEqual(content.sessionId, nil)
+      }
+    }
   }
 }
