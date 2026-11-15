@@ -6,7 +6,8 @@ import Foundation
 /// That JSON carries the thread's hosted web link
 /// (`https://app.t3.codes/threads/<environment>/<thread>`). The link is the
 /// one place the CLI reports the environment id, which every way of opening
-/// the thread needs alongside the thread id.
+/// the thread needs alongside the thread id. It also carries the thread's
+/// title.
 public struct T3CodeThread: Equatable {
     /// Allowed alphabet of an environment or thread id. The ids are embedded
     /// in a `sh -c` command, so anything outside it is rejected.
@@ -21,6 +22,8 @@ public struct T3CodeThread: Equatable {
     public let origin: String
     public let environmentId: String
     public let threadId: String
+    /// The thread's title on one line, or nil when it has none.
+    public let title: String?
 
     public init?(threadShowOutput: Data) {
         guard let json = try? JSONSerialization.jsonObject(with: threadShowOutput) as? [String: Any],
@@ -40,6 +43,12 @@ public struct T3CodeThread: Equatable {
         self.origin = origin
         self.environmentId = segments[1]
         self.threadId = segments[2]
+
+        let title = (thread["title"] as? String)?
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        self.title = title?.isEmpty == false ? title : nil
     }
 
     /// The shell command that opens the thread in the T3 Code desktop app.
@@ -56,7 +65,7 @@ public struct T3CodeThread: Equatable {
     /// say which one to bring forward.
     public func webAppRevealCommand(appPath: String) -> String {
         let link = "\(origin)/threads/\(environmentId)/\(threadId)"
-        return "open -a \(ReactivationContext.shellQuoted(appPath)) '\(link)'"
+        return "open -a \(AdapterContext.shellQuoted(appPath)) '\(link)'"
     }
 
     /// The origin a Safari "Add to Dock" web app was made from, read from

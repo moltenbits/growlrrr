@@ -2,14 +2,14 @@ import Foundation
 
 /// Terminal.app: returns to the window and tab that were in front when the
 /// notification was sent.
-public final class TerminalAppReactivation: ReactivationMethod {
+public final class TerminalAppAdapter: ApplicationAdapter {
     public init() {}
 
-    public func applies(in context: ReactivationContext) -> Bool {
+    public func applies(in context: AdapterContext) -> Bool {
         context.environment["TERM_PROGRAM"] == "Apple_Terminal"
     }
 
-    public func clickCommand(in context: ReactivationContext) -> String? {
+    public func clickCommand(in context: AdapterContext) -> String? {
         let activate = "osascript -e 'tell application \"Terminal\" to activate'"
 
         // Capture the current Terminal.app window and tab

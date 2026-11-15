@@ -17,4 +17,4 @@ The session id route needs none. The other routes use AppleScript, so macOS asks
 
 ## Implementation
 
-`ITermReactivation` and `ITermSession` in `Sources/GrowlrrrCore/Reactivation/`.
+`ITermAdapter` and `ITermSession` in `Sources/GrowlrrrCore/Adapters/`.

@@ -66,7 +66,7 @@ extension Growlrrr.Hook {
         var gate: String?
 
         func run() async throws {
-            var reactivationContext = ReactivationContext.live()
+            var adapterContext = AdapterContext.live()
 
             // Read stdin up front so the gate sees the same bytes we do.
             // See HookStdinPolicy for when --message lets us skip it.
@@ -85,17 +85,14 @@ extension Growlrrr.Hook {
                 return
             }
 
-            let subtitle: String?
-            let resolvedMessage: String
-            let stdinSessionId: String?
+            let content: HookNotificationContent
             if let message {
-                subtitle = nil
-                resolvedMessage = message
                 // If a gate required stdin, retain its session even when
                 // the message body was overridden. Without a gate,
                 // --message deliberately does not read stdin.
                 let json = try? JSONSerialization.jsonObject(with: stdinData) as? [String: Any]
-                stdinSessionId = json?["session_id"] as? String
+                content = HookNotificationContent(
+                    message: message, sessionId: json?["session_id"] as? String)
             } else {
                 // HookNotificationContentResolver turns the hook's JSON into
                 // the notification text, the same way for every agent.
@@ -110,11 +107,8 @@ extension Growlrrr.Hook {
                         throw ExitCode(1)
                     }
 
-                    let content = HookNotificationContentResolver.content(
+                    content = HookNotificationContentResolver.content(
                         from: json, agent: codex ? .codex : .claudeCode)
-                    stdinSessionId = content.sessionId
-                    subtitle = content.subtitle
-                    resolvedMessage = content.message
                 } catch let error as ExitCode {
                     throw error
                 } catch {
@@ -122,6 +116,9 @@ extension Growlrrr.Hook {
                     throw ExitCode(1)
                 }
             }
+
+            let stdinSessionId = content.sessionId
+            let resolvedMessage = content.message
 
             // Resolve title: explicit --title wins, then appId, then "Growlrrr"
             let resolvedTitle = title ?? appId ?? "Growlrrr"
@@ -132,10 +129,14 @@ extension Growlrrr.Hook {
                 appId: appId)
             let identifier = replace ? "growlrrr-hook" : "growlrrr-hook-\(sessionId)"
 
-            reactivationContext.hookSessionId = stdinSessionId
-            let reactivation = Reactivation()
-            guard reactivation.shouldNotify(in: reactivationContext) else { return }
-            let executeCommand = reactivate ? reactivation.clickCommand(in: reactivationContext) : nil
+            adapterContext.hookSessionId = stdinSessionId
+            let adapters = ApplicationAdapters()
+            guard adapters.shouldNotify(in: adapterContext) else { return }
+            // An application that names its conversations, such as by a
+            // thread title, gets that name in place of the waiting line.
+            let subtitle = content.subtitle(
+                conversationName: adapters.conversationName(in: adapterContext))
+            let executeCommand = reactivate ? adapters.clickCommand(in: adapterContext) : nil
 
             // Handle custom app
             if let appId = appId {
@@ -231,7 +232,7 @@ extension Growlrrr.Hook {
             // Created before anything slow: a prompt was just submitted, so
             // the frontmost app it captures is the one the prompt was typed
             // into.
-            var reactivationContext = ReactivationContext.live()
+            var adapterContext = AdapterContext.live()
 
             // Claude Code pipes hook JSON on stdin; skip it when run from a
             // terminal so a manual invocation doesn't block waiting for EOF.
@@ -252,8 +253,8 @@ extension Growlrrr.Hook {
 
             // After the gate, so a prompt the gate says is not the
             // operator's does not change where a click will lead.
-            reactivationContext.hookSessionId = stdinSessionId
-            Reactivation().promptSubmitted(in: reactivationContext)
+            adapterContext.hookSessionId = stdinSessionId
+            ApplicationAdapters().promptSubmitted(in: adapterContext)
 
             let sessionId = HookSession.derive(
                 environmentSessionId: ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"],

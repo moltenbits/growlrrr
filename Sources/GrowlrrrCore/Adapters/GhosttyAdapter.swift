@@ -2,14 +2,14 @@ import Foundation
 
 /// Ghostty: returns to the terminal that was focused when the notification
 /// was sent.
-public final class GhosttyReactivation: ReactivationMethod {
+public final class GhosttyAdapter: ApplicationAdapter {
     public init() {}
 
-    public func applies(in context: ReactivationContext) -> Bool {
+    public func applies(in context: AdapterContext) -> Bool {
         context.environment["TERM_PROGRAM"] == "ghostty"
     }
 
-    public func clickCommand(in context: ReactivationContext) -> String? {
+    public func clickCommand(in context: AdapterContext) -> String? {
         // Capture the focused terminal's UUID via AppleScript
         guard let terminalId = context.appleScript("""
             tell application "Ghostty"

@@ -7,19 +7,23 @@ import Foundation
 /// The thread can be shown by the T3 Code desktop app, or by any number of
 /// Safari "Add to Dock" web apps made from T3 Code's site — someone may keep
 /// several, each filtered to one project. Nothing ties a thread to one of
-/// those, so this method remembers which one each thread was last prompted
+/// those, so this adapter remembers which one each thread was last prompted
 /// from and returns there.
-public final class T3CodeReactivation: ReactivationMethod {
+public final class T3CodeAdapter: ApplicationAdapter {
     /// A T3 Code server started from a terminal passes that terminal's
     /// variables on to its agents; the thread is still where to return to.
-    public static let layer = ReactivationLayer.agentHost
+    public static let layer = AdapterLayer.agentApp
 
     /// How long to wait for `t3 thread show`.
     private static let lookupTimeout: TimeInterval = 5
 
+    /// Threads already asked for, by thread id, so that the click and the
+    /// conversation name of one notification cost one `t3 thread show`.
+    private var lookedUpThreads: [String: T3CodeThread?] = [:]
+
     public init() {}
 
-    public func applies(in context: ReactivationContext) -> Bool {
+    public func applies(in context: AdapterContext) -> Bool {
         explicitThreadId(in: context) != nil
             || !(context.environment["T3CODE_CLI_PATH"] ?? "").isEmpty
             || context.environment["CODEX_INTERNAL_ORIGINATOR_OVERRIDE"] == "T3"
@@ -28,7 +32,7 @@ public final class T3CodeReactivation: ReactivationMethod {
     /// T3 Code also runs Codex for internal jobs such as generating titles.
     /// Their sessions have no app thread and should not send notifications.
     /// A failed lookup preserves the notification, without a click action.
-    public func shouldNotify(in context: ReactivationContext) -> Bool {
+    public func shouldNotify(in context: AdapterContext) -> Bool {
         guard explicitThreadId(in: context) == nil,
               let threads = codexThreadIds(in: context) else {
             return true
@@ -40,7 +44,7 @@ public final class T3CodeReactivation: ReactivationMethod {
     /// app when none is remembered. A thread that cannot be looked up gets
     /// no click action: activating T3 Code without a thread is not a return
     /// to anywhere in particular.
-    public func clickCommand(in context: ReactivationContext) -> String? {
+    public func clickCommand(in context: AdapterContext) -> String? {
         guard let threadId = threadId(in: context),
               let thread = lookUpThread(threadId, in: context) else {
             return nil
@@ -52,6 +56,14 @@ public final class T3CodeReactivation: ReactivationMethod {
         return thread.desktopAppRevealCommand
     }
 
+    /// The thread's title.
+    public func conversationName(in context: AdapterContext) -> String? {
+        guard let threadId = threadId(in: context) else {
+            return nil
+        }
+        return lookUpThread(threadId, in: context)?.title
+    }
+
     /// Notes which T3 Code client the prompt was typed into, going by the
     /// app that was frontmost:
     /// - a web app made from the thread's site is remembered for the thread;
@@ -59,7 +71,7 @@ public final class T3CodeReactivation: ReactivationMethod {
     ///   is where a click leads by default;
     /// - any other app changes nothing, because nobody typed the prompt
     ///   into it (a queued or scheduled prompt).
-    public func promptSubmitted(in context: ReactivationContext) {
+    public func promptSubmitted(in context: AdapterContext) {
         guard let threadId = threadId(in: context),
               let frontmostApp = context.frontmostApp?.standardizedFileURL else {
             return
@@ -87,7 +99,7 @@ public final class T3CodeReactivation: ReactivationMethod {
         try? store.set(frontmostApp.path, forKey: threadId)
     }
 
-    private func threadId(in context: ReactivationContext) -> String? {
+    private func threadId(in context: AdapterContext) -> String? {
         if let threadId = explicitThreadId(in: context) {
             return threadId
         }
@@ -97,7 +109,7 @@ public final class T3CodeReactivation: ReactivationMethod {
         return threads[0]
     }
 
-    private func explicitThreadId(in context: ReactivationContext) -> String? {
+    private func explicitThreadId(in context: AdapterContext) -> String? {
         guard let threadId = context.environment["T3CODE_THREAD_ID"], !threadId.isEmpty else {
             return nil
         }
@@ -109,7 +121,7 @@ public final class T3CodeReactivation: ReactivationMethod {
     /// `provider_session_id` identifies the shared app-server, whereas
     /// nativeThreadRef.nativeId is the Codex session in hook stdin.
     /// Nil means unavailable/changed schema; an empty array means no thread.
-    private func codexThreadIds(in context: ReactivationContext) -> [String]? {
+    private func codexThreadIds(in context: AdapterContext) -> [String]? {
         guard let sessionId = context.hookSessionId, !sessionId.isEmpty,
               !sessionId.contains("\0") else {
             return nil
@@ -142,7 +154,10 @@ public final class T3CodeReactivation: ReactivationMethod {
 
     /// Asks the t3 CLI for the thread. T3 Code usually names its own CLI in
     /// `T3CODE_CLI_PATH`; otherwise whichever `t3` is on `PATH` is used.
-    private func lookUpThread(_ threadId: String, in context: ReactivationContext) -> T3CodeThread? {
+    private func lookUpThread(_ threadId: String, in context: AdapterContext) -> T3CodeThread? {
+        if let lookedUp = lookedUpThreads[threadId] {
+            return lookedUp
+        }
         let showThread = ["thread", "show", threadId, "--json", "--messages", "0"]
         let output: Data?
         if let cli = context.environment["T3CODE_CLI_PATH"], !cli.isEmpty {
@@ -150,6 +165,8 @@ public final class T3CodeReactivation: ReactivationMethod {
         } else {
             output = context.run("/usr/bin/env", ["t3"] + showThread, timeout: Self.lookupTimeout)
         }
-        return output.flatMap(T3CodeThread.init(threadShowOutput:))
+        let thread = output.flatMap(T3CodeThread.init(threadShowOutput:))
+        lookedUpThreads.updateValue(thread, forKey: threadId)
+        return thread
     }
 }

@@ -1,14 +1,14 @@
 import Foundation
 
 /// iTerm2: returns to the exact session, by the most reliable means on hand.
-public final class ITermReactivation: ReactivationMethod {
+public final class ITermAdapter: ApplicationAdapter {
     public init() {}
 
-    public func applies(in context: ReactivationContext) -> Bool {
+    public func applies(in context: AdapterContext) -> Bool {
         context.environment["TERM_PROGRAM"] == "iTerm.app"
     }
 
-    public func clickCommand(in context: ReactivationContext) -> String? {
+    public func clickCommand(in context: AdapterContext) -> String? {
         // Strategy 1: Use ITERM_SESSION_ID environment variable with iTerm2's
         // reveal URL. iTerm2 sets the variable directly in every session, and
         // the URL handler finds the session even when its window is minimized

@@ -1,11 +1,11 @@
 import Foundation
 
-/// Small values a reactivation method keeps between runs of growlrrr, such
+/// Small values an adapter keeps between runs of growlrrr, such
 /// as something noted when a prompt was submitted and needed when the turn
 /// ends. Those are separate processes, so each key is a file of its own.
 ///
-/// Get one from `ReactivationContext.store(for:)`; each method has its own.
-public struct ReactivationStore {
+/// Get one from `AdapterContext.store(for:)`; each adapter has its own.
+public struct AdapterStore {
     public enum StoreError: Error {
         case invalidKey(String)
     }

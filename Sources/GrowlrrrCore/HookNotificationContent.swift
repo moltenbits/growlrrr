@@ -1,9 +1,40 @@
 import Foundation
 
 public struct HookNotificationContent: Equatable {
-  public let subtitle: String?
+  /// A subtitle that says something about this event, such as which tool
+  /// needs permission.
+  let eventSubtitle: String?
+  /// The line that only says the agent is waiting, shown as the subtitle
+  /// when there is nothing better.
+  let waitingSubtitle: String?
   public let message: String
   public let sessionId: String?
+
+  /// The content of a notification whose message was given on the command
+  /// line (`--message`), which has no subtitle of its own.
+  public init(message: String, sessionId: String?) {
+    self.init(eventSubtitle: nil, waitingSubtitle: nil, message: message, sessionId: sessionId)
+  }
+
+  init(eventSubtitle: String?, waitingSubtitle: String?, message: String, sessionId: String?) {
+    self.eventSubtitle = eventSubtitle
+    self.waitingSubtitle = waitingSubtitle
+    self.message = message
+    self.sessionId = sessionId
+  }
+
+  /// The subtitle when the application has no name for the conversation.
+  public var subtitle: String? {
+    subtitle(conversationName: nil)
+  }
+
+  /// The subtitle, given what the application the hook ran in calls the
+  /// conversation (see `ApplicationAdapter.conversationName`). The name
+  /// takes the place of the waiting line and fills an empty subtitle; it
+  /// never replaces what the event says about itself.
+  public func subtitle(conversationName: String?) -> String? {
+    eventSubtitle ?? conversationName ?? waitingSubtitle
+  }
 }
 
 /// The coding agent whose hook is sending the notification. It only supplies
@@ -31,12 +62,13 @@ public enum HookNotificationContentResolver {
       // The turn ended: show what the agent last said.
       if let lastAssistantMessage = string(json["last_assistant_message"]) {
         return HookNotificationContent(
-          subtitle: waiting,
+          eventSubtitle: nil,
+          waitingSubtitle: waiting,
           message: truncated(lastAssistantMessage),
           sessionId: sessionId
         )
       }
-      return HookNotificationContent(subtitle: nil, message: waiting, sessionId: sessionId)
+      return HookNotificationContent(message: waiting, sessionId: sessionId)
 
     case "PermissionRequest":
       let toolInput = json["tool_input"] as? [String: Any]
@@ -47,7 +79,8 @@ public enum HookNotificationContentResolver {
         ?? "\(agent.name) wants permission to continue"
 
       return HookNotificationContent(
-        subtitle: permissionSubtitle(agent: agent, toolName: string(json["tool_name"])),
+        eventSubtitle: permissionSubtitle(agent: agent, toolName: string(json["tool_name"])),
+        waitingSubtitle: nil,
         message: truncated(message),
         sessionId: sessionId
       )
@@ -56,7 +89,8 @@ public enum HookNotificationContentResolver {
       // Events that carry their own text, such as Claude Code's
       // Notification: {"title": ..., "message": ...}.
       return HookNotificationContent(
-        subtitle: string(json["title"]),
+        eventSubtitle: string(json["title"]),
+        waitingSubtitle: nil,
         message: string(json["message"]).map { truncated($0) } ?? waiting,
         sessionId: sessionId
       )

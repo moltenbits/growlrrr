@@ -18,4 +18,4 @@ macOS asks once for permission for growlrrr to control Ghostty (System Settings 
 
 ## Implementation
 
-`GhosttyReactivation` in `Sources/GrowlrrrCore/Reactivation/`.
+`GhosttyAdapter` in `Sources/GrowlrrrCore/Adapters/`.

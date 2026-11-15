@@ -18,4 +18,4 @@ macOS asks once for permission for growlrrr to control Terminal.app (System Sett
 
 ## Implementation
 
-`TerminalAppReactivation` in `Sources/GrowlrrrCore/Reactivation/`.
+`TerminalAppAdapter` in `Sources/GrowlrrrCore/Adapters/`.

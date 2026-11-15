@@ -20,4 +20,4 @@ These terminals only use simple app activation and do not trigger the Automation
 
 ## Implementation
 
-`NamedTerminalReactivation` in `Sources/GrowlrrrCore/Reactivation/`.
+`NamedTerminalAdapter` in `Sources/GrowlrrrCore/Adapters/`.
