@@ -8,15 +8,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make build              # Debug build (executable only)
 make release            # Release build (executable only)
 make bundle             # Debug app bundle (required for notifications to work)
-make bundle-release     # Release app bundle
+make bundle-release     # Universal (arm64 + x86_64) release app bundle, as published
+make bundle-release-native  # Release app bundle for this Mac's architecture only
 make test               # Run tests
-make install            # Build release bundle, install to /Applications, create symlinks
+make install            # Build native release bundle, install to /Applications, create symlinks
 make run                # Build debug bundle and send a test notification
 make format             # Format code (requires swift-format)
 make lint               # Lint code (requires swift-format)
 ```
 
-All swift commands use `--disable-sandbox`. The app bundle is built via `scripts/bundle.sh` which compiles, creates the `.app` structure, generates shell completions, and code-signs.
+All swift commands use `--disable-sandbox`. The app bundle is built via `scripts/bundle.sh [debug|release] [universal|native]` which compiles, creates the `.app` structure, generates shell completions, and code-signs. A release bundle is universal unless `native` is passed; published releases and CI use the universal build, `make install` the native one.
 
 ## Architecture
 

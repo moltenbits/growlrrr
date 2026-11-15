@@ -37,6 +37,12 @@ jobs:
           test -f .build/release/growlrrr.app/Contents/Resources/AppIcon.icns
           echo "Bundle structure verified"
 
+      - name: Verify bundle is universal
+        run: |
+          archs="$(lipo -archs .build/release/growlrrr.app/Contents/MacOS/growlrrr)"
+          echo "Architectures: $archs"
+          [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]]
+
       - name: Test CLI
         run: |
           .build/release/growlrrr.app/Contents/MacOS/growlrrr --version
