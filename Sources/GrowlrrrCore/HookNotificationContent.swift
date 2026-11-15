@@ -6,74 +6,68 @@ public struct HookNotificationContent: Equatable {
   public let sessionId: String?
 }
 
-public enum HookNotificationContentResolver {
-  public static func claudeCode(from json: [String: Any]) -> HookNotificationContent {
-    let sessionId = string(json["session_id"])
-    let eventName = string(json["hook_event_name"])
+/// The coding agent whose hook is sending the notification. It only supplies
+/// the name used in the text; the format is the same for every agent.
+public enum HookAgent {
+  case claudeCode
+  case codex
 
-    if eventName == "Stop" {
-      return HookNotificationContent(
-        subtitle: nil,
-        message: "Claude is ready",
-        sessionId: sessionId
-      )
+  var name: String {
+    switch self {
+    case .claudeCode: return "Claude"
+    case .codex: return "Codex"
     }
-
-    return HookNotificationContent(
-      subtitle: string(json["title"]),
-      message: string(json["message"]) ?? "Notification",
-      sessionId: sessionId
-    )
   }
+}
 
-  public static func codex(from json: [String: Any]) -> HookNotificationContent {
+public enum HookNotificationContentResolver {
+  /// Turns the JSON an agent pipes to a hook into notification text.
+  public static func content(from json: [String: Any], agent: HookAgent) -> HookNotificationContent {
     let sessionId = string(json["session_id"])
-    let eventName = string(json["hook_event_name"])
+    let waiting = "\(agent.name) is waiting for your input"
 
-    switch eventName {
+    switch string(json["hook_event_name"]) {
     case "Stop":
+      // The turn ended: show what the agent last said.
       if let lastAssistantMessage = string(json["last_assistant_message"]) {
         return HookNotificationContent(
-          subtitle: "Codex is waiting for your input",
+          subtitle: waiting,
           message: truncated(lastAssistantMessage),
           sessionId: sessionId
         )
       }
-      return HookNotificationContent(
-        subtitle: nil,
-        message: "Codex is waiting for your input",
-        sessionId: sessionId
-      )
+      return HookNotificationContent(subtitle: nil, message: waiting, sessionId: sessionId)
 
     case "PermissionRequest":
-      let toolName = string(json["tool_name"])
       let toolInput = json["tool_input"] as? [String: Any]
       let message =
         string(toolInput?["description"])
         ?? string(toolInput?["command"])
         ?? jsonSummary(toolInput)
-        ?? "Codex wants permission to continue"
+        ?? "\(agent.name) wants permission to continue"
 
       return HookNotificationContent(
-        subtitle: permissionSubtitle(toolName: toolName),
+        subtitle: permissionSubtitle(agent: agent, toolName: string(json["tool_name"])),
         message: truncated(message),
         sessionId: sessionId
       )
 
     default:
+      // Events that carry their own text, such as Claude Code's
+      // Notification: {"title": ..., "message": ...}.
       return HookNotificationContent(
-        subtitle: eventName.map { "Codex \($0)" },
-        message: string(json["message"]) ?? "Codex is waiting for your input",
+        subtitle: string(json["title"]),
+        message: string(json["message"]).map { truncated($0) } ?? waiting,
         sessionId: sessionId
       )
     }
   }
 
-  private static func permissionSubtitle(toolName: String?) -> String {
-    guard let toolName, !toolName.isEmpty else {
-      return "Codex needs permission"
+  private static func permissionSubtitle(agent: HookAgent, toolName: String?) -> String {
+    guard let toolName else {
+      return "\(agent.name) needs permission"
     }
-    return "Codex needs permission: \(toolName)"
+    return "\(agent.name) needs permission: \(toolName)"
   }
 
   private static func string(_ value: Any?) -> String? {

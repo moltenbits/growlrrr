@@ -55,7 +55,7 @@ extension Growlrrr.Hook {
         @Flag(name: .long, help: "Replace any existing notification instead of stacking a new one")
         var replace: Bool = false
 
-        @Flag(name: .long, help: "Parse stdin as Codex hook JSON")
+        @Flag(name: .long, help: "The hook is run by Codex: name Codex, not Claude, in the notification text")
         var codex: Bool = false
 
         @Option(
@@ -97,9 +97,8 @@ extension Growlrrr.Hook {
                 let json = try? JSONSerialization.jsonObject(with: stdinData) as? [String: Any]
                 stdinSessionId = json?["session_id"] as? String
             } else {
-                // Supports two schemas:
-                //   Stop event:         {"hook_event_name":"Stop", "last_assistant_message":"..."}
-                //   Notification event: {"title":"...", "message":"..."}
+                // HookNotificationContentResolver turns the hook's JSON into
+                // the notification text, the same way for every agent.
                 guard !stdinData.isEmpty else {
                     fputs("Error: No input on stdin. Pipe JSON with title/message fields.\n", stderr)
                     throw ExitCode(1)
@@ -111,9 +110,8 @@ extension Growlrrr.Hook {
                         throw ExitCode(1)
                     }
 
-                    let content = codex
-                        ? HookNotificationContentResolver.codex(from: json)
-                        : HookNotificationContentResolver.claudeCode(from: json)
+                    let content = HookNotificationContentResolver.content(
+                        from: json, agent: codex ? .codex : .claudeCode)
                     stdinSessionId = content.sessionId
                     subtitle = content.subtitle
                     resolvedMessage = content.message
