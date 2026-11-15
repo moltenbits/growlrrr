@@ -121,7 +121,7 @@ final class AdapterContextTests: XCTestCase {
         XCTAssertEqual(context().store(for: StoreOwner()).value(forKey: "thread-1"), "remembered")
     }
 
-    func testEachMethodHasItsOwnStore() throws {
+    func testEachAdapterHasItsOwnStore() throws {
         try context().store(for: StoreOwner()).set("mine", forKey: "thread-1")
 
         XCTAssertNil(context().store(for: OtherStoreOwner()).value(forKey: "thread-1"))

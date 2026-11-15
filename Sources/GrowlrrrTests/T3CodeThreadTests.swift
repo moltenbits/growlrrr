@@ -5,15 +5,13 @@ final class T3CodeThreadTests: XCTestCase {
 
     /// The shape `t3 thread show <id> --json` prints, trimmed to the fields
     /// that matter here.
-    private func threadShowOutput(link: String) -> Data {
-        let json: [String: Any] = [
-            "thread": [
-                "threadId": "962887c7-9d48-4440-99bd-0461933b8033",
-                "title": "Clean Up Branches Merged to Main",
-                "link": link,
-            ],
-            "messages": [],
+    private func threadShowOutput(link: String, title: Any? = "Clean Up Branches Merged to Main") -> Data {
+        var thread: [String: Any] = [
+            "threadId": "962887c7-9d48-4440-99bd-0461933b8033",
+            "link": link,
         ]
+        thread["title"] = title
+        let json: [String: Any] = ["thread": thread, "messages": []]
         return try! JSONSerialization.data(withJSONObject: json)
     }
 
@@ -42,6 +40,26 @@ final class T3CodeThreadTests: XCTestCase {
             link: "https://app.t3.codes/threads/7e9a75d0-3c28-48ef-a9f3-9551e82938b6/962887c7-9d48-4440-99bd-0461933b8033"))
         XCTAssertEqual(thread.threadId, "962887c7-9d48-4440-99bd-0461933b8033")
         XCTAssertEqual(thread.origin, "https://app.t3.codes")
+    }
+
+    func testReadsTheThreadTitle() throws {
+        let thread = try XCTUnwrap(thread(link: "https://app.t3.codes/threads/env-1/thread-1"))
+        XCTAssertEqual(thread.title, "Clean Up Branches Merged to Main")
+    }
+
+    func testAThreadWithoutAUsableTitleIsStillAThread() throws {
+        for title in [nil, "", "  \n ", 42] as [Any?] {
+            let thread = try XCTUnwrap(T3CodeThread(threadShowOutput: threadShowOutput(
+                link: "https://app.t3.codes/threads/env-1/thread-1", title: title)))
+            XCTAssertNil(thread.title)
+            XCTAssertEqual(thread.threadId, "thread-1")
+        }
+    }
+
+    func testATitleIsKeptOnOneLine() throws {
+        let thread = try XCTUnwrap(T3CodeThread(threadShowOutput: threadShowOutput(
+            link: "https://app.t3.codes/threads/env-1/thread-1", title: "  Fix the\nlogin page ")))
+        XCTAssertEqual(thread.title, "Fix the login page")
     }
 
     func testKeepsAnExplicitPortInTheOrigin() throws {

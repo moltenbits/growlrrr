@@ -17,6 +17,10 @@ public final class T3CodeAdapter: ApplicationAdapter {
     /// How long to wait for `t3 thread show`.
     private static let lookupTimeout: TimeInterval = 5
 
+    /// Threads already asked for, by thread id, so that the click and the
+    /// conversation name of one notification cost one `t3 thread show`.
+    private var lookedUpThreads: [String: T3CodeThread?] = [:]
+
     public init() {}
 
     public func applies(in context: AdapterContext) -> Bool {
@@ -50,6 +54,14 @@ public final class T3CodeAdapter: ApplicationAdapter {
             return thread.webAppRevealCommand(appPath: webApp)
         }
         return thread.desktopAppRevealCommand
+    }
+
+    /// The thread's title.
+    public func conversationName(in context: AdapterContext) -> String? {
+        guard let threadId = threadId(in: context) else {
+            return nil
+        }
+        return lookUpThread(threadId, in: context)?.title
     }
 
     /// Notes which T3 Code client the prompt was typed into, going by the
@@ -143,6 +155,9 @@ public final class T3CodeAdapter: ApplicationAdapter {
     /// Asks the t3 CLI for the thread. T3 Code usually names its own CLI in
     /// `T3CODE_CLI_PATH`; otherwise whichever `t3` is on `PATH` is used.
     private func lookUpThread(_ threadId: String, in context: AdapterContext) -> T3CodeThread? {
+        if let lookedUp = lookedUpThreads[threadId] {
+            return lookedUp
+        }
         let showThread = ["thread", "show", threadId, "--json", "--messages", "0"]
         let output: Data?
         if let cli = context.environment["T3CODE_CLI_PATH"], !cli.isEmpty {
@@ -150,6 +165,8 @@ public final class T3CodeAdapter: ApplicationAdapter {
         } else {
             output = context.run("/usr/bin/env", ["t3"] + showThread, timeout: Self.lookupTimeout)
         }
-        return output.flatMap(T3CodeThread.init(threadShowOutput:))
+        let thread = output.flatMap(T3CodeThread.init(threadShowOutput:))
+        lookedUpThreads.updateValue(thread, forKey: threadId)
+        return thread
     }
 }

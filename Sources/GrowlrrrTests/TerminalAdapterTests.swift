@@ -32,7 +32,7 @@ final class TerminalAdapterTests: XCTestCase {
 
     // MARK: - Discovery
 
-    func testTheTerminalMethodsAreDiscovered() {
+    func testTheTerminalAdaptersAreDiscovered() {
         let discovered = Set(ApplicationAdapters.discover().map { String(describing: type(of: $0)) })
 
         XCTAssertTrue(
@@ -43,14 +43,14 @@ final class TerminalAdapterTests: XCTestCase {
             "discovered: \(discovered.sorted())")
     }
 
-    func testTerminalMethodsSitInTheTerminalLayer() {
+    func testTerminalAdaptersSitInTheTerminalLayer() {
         XCTAssertEqual(ITermAdapter.layer, .terminal)
         XCTAssertEqual(TerminalAppAdapter.layer, .terminal)
         XCTAssertEqual(GhosttyAdapter.layer, .terminal)
         XCTAssertEqual(NamedTerminalAdapter.layer, .terminal)
     }
 
-    func testAtMostOneTerminalMethodAppliesToATerminal() {
+    func testAtMostOneTerminalAdapterAppliesToATerminal() {
         let adapters: [ApplicationAdapter] = [
             ITermAdapter(), TerminalAppAdapter(), GhosttyAdapter(),
             NamedTerminalAdapter(),

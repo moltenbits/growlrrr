@@ -13,6 +13,8 @@ final class T3CodeAdapterTests: XCTestCase {
     /// What the `t3` CLI prints; nil makes it fail.
     private var threadLink: String? =
         "https://app.t3.codes/threads/7e9a75d0-3c28-48ef-a9f3-9551e82938b6/962887c7-9d48-4440-99bd-0461933b8033"
+    /// The title the `t3` CLI reports for the thread.
+    private var threadTitle: String? = "Clean Up Branches Merged to Main"
 
     override func setUpWithError() throws {
         scratch = FileManager.default.temporaryDirectory
@@ -66,7 +68,9 @@ final class T3CodeAdapterTests: XCTestCase {
                 guard let link = self.threadLink else {
                     return nil
                 }
-                let json: [String: Any] = ["thread": ["link": link], "messages": []]
+                var thread: [String: Any] = ["link": link]
+                thread["title"] = self.threadTitle
+                let json: [String: Any] = ["thread": thread, "messages": []]
                 return try? JSONSerialization.data(withJSONObject: json)
             })
         context.hookSessionId = hookSessionId
@@ -371,5 +375,49 @@ final class T3CodeAdapterTests: XCTestCase {
         // Already remembered: nothing to learn.
         adapter.promptSubmitted(in: context(frontmostApp: webApp))
         XCTAssertEqual(commandsRun.count, 1)
+    }
+
+    // MARK: - The conversation name
+
+    func testTheConversationIsNamedAfterTheThreadTitle() {
+        XCTAssertEqual(T3CodeAdapter().conversationName(in: context()), "Clean Up Branches Merged to Main")
+    }
+
+    func testACodexHookNamesTheThreadItsSessionBelongsTo() throws {
+        try makeT3Database()
+        try addCodexSession("codex-session", thread: threadId)
+
+        XCTAssertEqual(
+            ApplicationAdapters(adapters: [T3CodeAdapter()]).conversationName(in: codexContext()),
+            "Clean Up Branches Merged to Main")
+    }
+
+    func testTheConversationIsUnnamedWhenTheThreadHasNoTitleOrCannotBeLookedUp() {
+        threadTitle = nil
+        XCTAssertNil(T3CodeAdapter().conversationName(in: context()))
+
+        threadTitle = "Clean Up Branches Merged to Main"
+        threadLink = nil
+        XCTAssertNil(T3CodeAdapter().conversationName(in: context()))
+    }
+
+    func testTheClickAndTheNameShareOneThreadLookup() {
+        let adapter = T3CodeAdapter()
+
+        XCTAssertEqual(adapter.clickCommand(in: context()), desktopCommand)
+        XCTAssertEqual(adapter.conversationName(in: context()), "Clean Up Branches Merged to Main")
+
+        XCTAssertEqual(commandsRun.count, 1, "\(commandsRun)")
+    }
+
+    func testAFailedThreadLookupIsNotRepeatedForTheName() {
+        // A lookup that fails may have waited out its timeout.
+        threadLink = nil
+        let adapter = T3CodeAdapter()
+
+        XCTAssertNil(adapter.clickCommand(in: context()))
+        XCTAssertNil(adapter.conversationName(in: context()))
+
+        XCTAssertEqual(commandsRun.count, 1, "\(commandsRun)")
     }
 }

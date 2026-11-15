@@ -11,6 +11,7 @@ private final class TerminalAdapter: ApplicationAdapter {
     init() {}
     func applies(in context: AdapterContext) -> Bool { isApplicable }
     func clickCommand(in context: AdapterContext) -> String? { command }
+    func conversationName(in context: AdapterContext) -> String? { "terminal-conversation" }
     func promptSubmitted(in context: AdapterContext) { promptsSeen += 1 }
 }
 
@@ -26,10 +27,12 @@ private final class AgentAppAdapter: ApplicationAdapter {
     static let layer = AdapterLayer.agentApp
     var isApplicable = true
     var command: String? = "agent-adapter-command"
+    var conversation: String? = "agent-adapter-conversation"
     var promptsSeen = 0
     init() {}
     func applies(in context: AdapterContext) -> Bool { isApplicable }
     func clickCommand(in context: AdapterContext) -> String? { command }
+    func conversationName(in context: AdapterContext) -> String? { conversation }
     func promptSubmitted(in context: AdapterContext) { promptsSeen += 1 }
 }
 
@@ -69,7 +72,7 @@ final class ApplicationAdaptersTests: XCTestCase {
 
     // MARK: - One adapter applies
 
-    func testUsesTheCommandOfTheMethodThatApplies() {
+    func testUsesTheCommandOfTheAdapterThatApplies() {
         let terminal = TerminalAdapter()
         let agentApp = AgentAppAdapter()
         agentApp.isApplicable = false
@@ -78,7 +81,7 @@ final class ApplicationAdaptersTests: XCTestCase {
         XCTAssertEqual(warnings, [])
     }
 
-    func testAMethodThatAppliesButHasNoCommandLeavesTheClickWithoutAnAction() {
+    func testAAdapterThatAppliesButHasNoCommandLeavesTheClickWithoutAnAction() {
         // The adapter recognised its own adapter and declined to act. That must
         // not fall through to activating the parent app.
         let agentApp = AgentAppAdapter()
@@ -88,14 +91,14 @@ final class ApplicationAdaptersTests: XCTestCase {
         XCTAssertNil(applicationAdapters([agentApp]).clickCommand(in: context(parentApp: parentApp)))
     }
 
-    func testALayerIsATerminalUnlessTheMethodSaysOtherwise() {
+    func testALayerIsATerminalUnlessTheAdapterSaysOtherwise() {
         XCTAssertEqual(MinimalAdapter.layer, .terminal)
         XCTAssertEqual(AgentAppAdapter.layer, .agentApp)
     }
 
     // MARK: - Several adapters apply
 
-    func testTheInnermostLayerWinsWhenMethodsInDifferentLayersApply() {
+    func testTheInnermostLayerWinsWhenAdaptersInDifferentLayersApply() {
         // An agent app started from a terminal carries both adapters'
         // variables; the person was working in the agent app.
         let adapters: [ApplicationAdapter] = [TerminalAdapter(), AgentAppAdapter()]
@@ -117,7 +120,7 @@ final class ApplicationAdaptersTests: XCTestCase {
 
     // MARK: - No adapter applies
 
-    func testActivatesTheParentAppWhenNoMethodApplies() {
+    func testActivatesTheParentAppWhenNoAdapterApplies() {
         let terminal = TerminalAdapter()
         terminal.isApplicable = false
         let parentApp = URL(fileURLWithPath: "/Applications/Visual Studio Code.app")
@@ -146,7 +149,7 @@ final class ApplicationAdaptersTests: XCTestCase {
 
     // MARK: - Prompt submitted
 
-    func testOnlyTheMethodThatWouldHandleTheClickHearsAboutAPrompt() {
+    func testOnlyTheAdapterThatWouldHandleTheClickHearsAboutAPrompt() {
         let terminal = TerminalAdapter()
         let agentApp = AgentAppAdapter()
 
@@ -156,7 +159,7 @@ final class ApplicationAdaptersTests: XCTestCase {
         XCTAssertEqual(terminal.promptsSeen, 0)
     }
 
-    func testAPromptWithNoApplicableMethodIsIgnored() {
+    func testAPromptWithNoApplicableAdapterIsIgnored() {
         let terminal = TerminalAdapter()
         terminal.isApplicable = false
 
@@ -165,7 +168,40 @@ final class ApplicationAdaptersTests: XCTestCase {
         XCTAssertEqual(terminal.promptsSeen, 0)
     }
 
-    func testAMethodNeedNotCareAboutPrompts() {
+    func testAAdapterNeedNotCareAboutPrompts() {
         applicationAdapters([MinimalAdapter()]).promptSubmitted(in: context())
+    }
+
+    // MARK: - Conversation name
+
+    func testTheConversationIsNamedByTheAdapterThatWouldHandleTheClick() {
+        let terminal = TerminalAdapter()
+        let agentApp = AgentAppAdapter()
+
+        XCTAssertEqual(
+            applicationAdapters([terminal, agentApp]).conversationName(in: context()),
+            "agent-adapter-conversation")
+
+        agentApp.isApplicable = false
+        XCTAssertEqual(
+            applicationAdapters([terminal, agentApp]).conversationName(in: context()),
+            "terminal-conversation")
+    }
+
+    func testAAdapterThatCannotNameTheConversationLeavesItUnnamed() {
+        // The innermost adapter is the only one asked: a terminal's name for
+        // the conversation would be the wrong one inside an agent app.
+        let agentApp = AgentAppAdapter()
+        agentApp.conversation = nil
+
+        XCTAssertNil(applicationAdapters([TerminalAdapter(), agentApp]).conversationName(in: context()))
+    }
+
+    func testAAdapterNeedNotNameConversations() {
+        XCTAssertNil(applicationAdapters([MinimalAdapter()]).conversationName(in: context()))
+    }
+
+    func testThereIsNoConversationNameWhenNoAdapterApplies() {
+        XCTAssertNil(applicationAdapters([]).conversationName(in: context()))
     }
 }

@@ -140,4 +140,71 @@ final class HookNotificationContentTests: XCTestCase {
       }
     }
   }
+
+  // MARK: - Conversation name
+
+  func testAConversationNameTakesThePlaceOfTheWaitingSubtitle() {
+    for (agent, _) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: [
+          "hook_event_name": "Stop",
+          "last_assistant_message": "Implemented the change and tests pass.",
+        ],
+        agent: agent)
+
+      XCTAssertEqual(content.subtitle(conversationName: "Fix the login page"), "Fix the login page")
+      XCTAssertEqual(content.message, "Implemented the change and tests pass.")
+    }
+  }
+
+  func testWithoutAConversationNameTheSubtitleIsTheDefault() {
+    for (agent, name) in agents {
+      let content = HookNotificationContentResolver.content(
+        from: ["hook_event_name": "Stop", "last_assistant_message": "Done."], agent: agent)
+
+      XCTAssertEqual(content.subtitle(conversationName: nil), "\(name) is waiting for your input")
+      XCTAssertEqual(content.subtitle(conversationName: nil), content.subtitle)
+    }
+  }
+
+  func testAConversationNameFillsAnEmptySubtitle() {
+    for (agent, name) in agents {
+      // A turn that ended without a message: the waiting line is the body.
+      let stop = HookNotificationContentResolver.content(from: ["hook_event_name": "Stop"], agent: agent)
+      XCTAssertEqual(stop.subtitle(conversationName: "Fix the login page"), "Fix the login page")
+      XCTAssertEqual(stop.message, "\(name) is waiting for your input")
+
+      let notification = HookNotificationContentResolver.content(
+        from: ["hook_event_name": "Notification", "message": "Claude is waiting for your input"],
+        agent: agent)
+      XCTAssertEqual(notification.subtitle(conversationName: "Fix the login page"), "Fix the login page")
+    }
+  }
+
+  func testAConversationNameDoesNotReplaceWhatTheEventSaysAboutItself() {
+    for (agent, name) in agents {
+      let permission = HookNotificationContentResolver.content(
+        from: [
+          "hook_event_name": "PermissionRequest", "tool_name": "Bash",
+          "tool_input": ["command": "git push"],
+        ],
+        agent: agent)
+      XCTAssertEqual(
+        permission.subtitle(conversationName: "Fix the login page"), "\(name) needs permission: Bash")
+
+      let titled = HookNotificationContentResolver.content(
+        from: ["hook_event_name": "Notification", "title": "Heads up", "message": "Something happened"],
+        agent: agent)
+      XCTAssertEqual(titled.subtitle(conversationName: "Fix the login page"), "Heads up")
+    }
+  }
+
+  func testAMessageGivenOnTheCommandLineHasOnlyTheConversationNameAsSubtitle() {
+    let content = HookNotificationContent(message: "Build finished", sessionId: "session-1")
+
+    XCTAssertEqual(content.message, "Build finished")
+    XCTAssertEqual(content.sessionId, "session-1")
+    XCTAssertNil(content.subtitle)
+    XCTAssertEqual(content.subtitle(conversationName: "Fix the login page"), "Fix the login page")
+  }
 }

@@ -335,7 +335,7 @@ How precisely growlrrr can return depends on the application the notification wa
 
 From any other application, the click brings forward the app the command was running in: the nearest app among the command's parent processes, such as an editor whose integrated terminal ran it.
 
-To add support for another application, see [Adding a Reactivation Method](#adding-a-reactivation-method).
+To add support for another application, see [Adding Support for an Application](#adding-support-for-an-application).
 
 ### Activate notifications via keyboard shortcut
 
@@ -461,9 +461,9 @@ growlrrr is distributed as an app bundle (`.app`) which is required for macOS's 
 
 Each custom app created with `grrr apps add` has its own bundle identifier, which means it appears as a separate app in System Settings > Notifications. Users can configure notification preferences (banners, sounds, badges) independently for each custom app.
 
-## Adding a Reactivation Method
+## Adding Support for an Application
 
-`--reactivate` works through reactivation methods: one class per application that growlrrr knows how to return to. They live in `Sources/GrowlrrrCore/Adapters/`. To support another application, add one file there with a `final class` that conforms to `ApplicationAdapter`:
+growlrrr knows each application through an adapter: one class per application that notifications are sent from, which says how a click returns to it. Adapters live in `Sources/GrowlrrrCore/Adapters/`. To support another application, add one file there with a `final class` that conforms to `ApplicationAdapter`:
 
 ```swift
 public final class MyTerminalAdapter: ApplicationAdapter {
@@ -481,9 +481,9 @@ public final class MyTerminalAdapter: ApplicationAdapter {
 }
 ```
 
-growlrrr finds every class that conforms to `ApplicationAdapter` when it starts, which is why a method is a class and not a struct.
+growlrrr finds every class that conforms to `ApplicationAdapter` when it starts, which is why an adapter is a class and not a struct.
 
-`AdapterContext` supplies what methods commonly need:
+`AdapterContext` supplies what adapters commonly need:
 
 | Member | What it gives you |
 |--------|-------------------|
@@ -492,17 +492,19 @@ growlrrr finds every class that conforms to `ApplicationAdapter` when it starts,
 | `frontmostApp` | The app that was frontmost when growlrrr started |
 | `run(_:_:timeout:)` | Runs a command and returns its output; pass a timeout for anything that could hang |
 | `appleScript(_:)` | Runs an AppleScript and returns its trimmed output |
-| `store(for:)` | A small per-method store that persists between runs, under `~/.growlrrr/reactivation/` |
+| `store(for:)` | A small per-adapter store that persists between runs, under `~/.growlrrr/adapters/` |
 | `shellQuoted(_:)` | Quotes a value for the click command, which runs through `sh -c` |
 
-Two optional parts of the protocol:
+The optional parts of the protocol:
 
-- **`promptSubmitted(in:)`** is called when a prompt is submitted (`grrr hook dismiss`). Implement it if the method has to remember something from that moment, such as which app the prompt was typed into.
-- **`static let layer`** says how deeply the method's adapter is nested, and only matters when several methods apply at once. The default, `.terminal`, is right for a terminal. An app that runs agents and can itself be started from a terminal declares `.agentApp`, so it wins over the terminal whose variables it inherited. Two methods in the same layer should never apply to the same notification; if they do, growlrrr picks one by name and prints a warning.
+- **`conversationName(in:)`** returns what the application calls the conversation a hook notification is about, such as a thread's title. `grrr hook notify` shows it as the subtitle in place of the line that says the agent is waiting. The default leaves the notification as it is.
+- **`shouldNotify(in:)`** returns false for a hook that should not notify at all, such as one run by an internal job of the application. The default is true.
+- **`promptSubmitted(in:)`** is called when a prompt is submitted (`grrr hook dismiss`). Implement it if the adapter has to remember something from that moment, such as which app the prompt was typed into.
+- **`static let layer`** says how deeply the adapter's application is nested, and only matters when several adapters apply at once. The default, `.terminal`, is right for a terminal. An app that runs agents and can itself be started from a terminal declares `.agentApp`, so it wins over the terminal whose variables it inherited. Two adapters in the same layer should never apply to the same notification; if they do, growlrrr picks one by name and prints a warning.
 
-When no method applies, growlrrr activates the nearest app among the sender's parent processes.
+When no adapter applies, growlrrr activates the nearest app among the sender's parent processes.
 
-Add tests next to the others in `Sources/GrowlrrrTests/`: an `AdapterContext` can be built from explicit parts, with a fake command runner, so a method's commands can be checked without the application being installed (see `TerminalAdapterTests`).
+Add tests next to the others in `Sources/GrowlrrrTests/`: an `AdapterContext` can be built from explicit parts, with a fake command runner, so an adapter's commands can be checked without the application being installed (see `TerminalAdapterTests`).
 
 Document the application in its own page, `docs/applications/<application>.md`, following the existing pages, and link the page from the list under [Reactivation](#reactivation). Details about one application belong in its page, not in this README.
 
@@ -513,8 +515,8 @@ Replace `<APPLICATION>` and give this prompt to an agent working in a clone of t
 ```text
 Add support to growlrrr for returning to <APPLICATION> when a notification is clicked.
 
-Read AGENTS.md and the "Adding a Reactivation Method" section of README.md, then the
-existing methods in Sources/GrowlrrrCore/Adapters/ and their tests in
+Read AGENTS.md and the "Adding Support for an Application" section of README.md, then
+the existing adapters in Sources/GrowlrrrCore/Adapters/ and their tests in
 Sources/GrowlrrrTests/.
 
 1. Investigate before writing code, on this machine, with <APPLICATION> running:
@@ -526,16 +528,16 @@ Sources/GrowlrrrTests/.
    - Can whatever identifies that window be captured while the notification is being
      sent, and is it still right if I switch windows before the notification fires?
    Tell me what you found and which approach you propose, and wait for my answer.
-   growlrrr already brings forward any app that has no method of its own, so if
+   growlrrr already brings forward any app that has no adapter of its own, so if
    <APPLICATION> offers nothing more specific than that, say so instead of writing
-   a method.
+   an adapter.
 
 2. Write the tests first, in a new file in Sources/GrowlrrrTests/. Build an
    AdapterContext with the environment you found and a fake command runner, and
    assert on the exact click command. Cover the case where the window cannot be
-   identified. Run them and confirm they fail because the method does not exist yet.
+   identified. Run them and confirm they fail because the adapter does not exist yet.
 
-3. Add the method: one final class conforming to ApplicationAdapter, in its own file
+3. Add the adapter: one final class conforming to ApplicationAdapter, in its own file
    in Sources/GrowlrrrCore/Adapters/. Change no other source file.
    - applies(in:) must be a cheap check that is true only inside <APPLICATION>.
    - clickCommand(in:) returns the shell command the click runs. Pass every

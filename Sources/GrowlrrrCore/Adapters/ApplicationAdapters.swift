@@ -1,7 +1,8 @@
 import Foundation
 
-/// The adapters growlrrr knows. Works out which one a notification is being
-/// sent from and puts questions about the notification to it.
+/// The adapters growlrrr has. Works out which one knows the application a
+/// notification is being sent from and puts questions about the
+/// notification to it.
 public struct ApplicationAdapters {
     /// Names allowed for a terminal program activated by name; the name is
     /// embedded in a `sh -c` command.
@@ -28,7 +29,14 @@ public struct ApplicationAdapters {
         return adapter.clickCommand(in: context)
     }
 
-    /// Internal adapter jobs may run the same hooks as user conversations.
+    /// What the application the notification is being sent from calls the
+    /// conversation, or nil when it has no name for it.
+    public func conversationName(in context: AdapterContext) -> String? {
+        adapter(for: context)?.conversationName(in: context)
+    }
+
+    /// An application's internal jobs may run the same hooks as user
+    /// conversations.
     /// Only the innermost adapter knows whether such a hook should notify.
     public func shouldNotify(in context: AdapterContext) -> Bool {
         adapter(for: context)?.shouldNotify(in: context) ?? true
