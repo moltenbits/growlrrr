@@ -21,6 +21,13 @@ fi
 APP_NAME="growlrrr"
 BUNDLE_ID="com.moltenbits.growlrrr"
 BUILD_CONFIG="${1:-release}"
+# "universal" (arm64 + x86_64) or "native" (this Mac's architecture only).
+# Only release builds can be universal; debug builds are always native.
+ARCHITECTURES="${2:-universal}"
+if [[ "$ARCHITECTURES" != "universal" && "$ARCHITECTURES" != "native" ]]; then
+    echo "Usage: $0 [debug|release] [universal|native]" >&2
+    exit 1
+fi
 
 # Construct the Developer ID Application signing identity from .env values.
 # When TEAM_NAME and TEAM_ID are both set, we sign for distribution
@@ -34,21 +41,27 @@ echo "Building $APP_NAME ($BUILD_CONFIG)..."
 
 # Build the executable.
 #
-# Release builds are universal (arm64 + x86_64) so a single archive runs on
-# both Apple Silicon and Intel Macs. Each slice is built with the native
-# SwiftPM build system via --triple and then combined with lipo, rather than
-# passing multiple --arch flags. Multi-arch builds route through the Xcode
+# Release builds are universal (arm64 + x86_64) by default so a single archive
+# runs on both Apple Silicon and Intel Macs. Each slice is built with the
+# native SwiftPM build system via --triple and then combined with lipo, rather
+# than passing multiple --arch flags. Multi-arch builds route through the Xcode
 # build system, which does not suppress compiler warnings from dependencies.
-# Debug builds stay native for speed.
+# A "native" release build skips the second slice, for installing on the Mac
+# that built it. Debug builds stay native for speed.
 cd "$PROJECT_DIR"
-if [[ "$BUILD_CONFIG" == "release" ]]; then
+if [[ "$BUILD_CONFIG" == "release" && "$ARCHITECTURES" == "universal" ]]; then
+    BIN_DIR="$BUILD_DIR/universal/$BUILD_CONFIG"
+    mkdir -p "$BIN_DIR"
     SLICES=()
     for TRIPLE in arm64-apple-macosx x86_64-apple-macosx; do
         swift build -c "$BUILD_CONFIG" --triple "$TRIPLE"
-        SLICES+=("$(swift build -c "$BUILD_CONFIG" --triple "$TRIPLE" --show-bin-path)/$APP_NAME")
+        # Keep each slice before building the next: some SwiftPM versions
+        # write every triple to the same directory, so the next build would
+        # replace this one.
+        SLICE="$BIN_DIR/$APP_NAME-$TRIPLE"
+        cp "$(swift build -c "$BUILD_CONFIG" --triple "$TRIPLE" --show-bin-path)/$APP_NAME" "$SLICE"
+        SLICES+=("$SLICE")
     done
-    BIN_DIR="$BUILD_DIR/universal/$BUILD_CONFIG"
-    mkdir -p "$BIN_DIR"
     lipo -create -output "$BIN_DIR/$APP_NAME" "${SLICES[@]}"
 else
     swift build -c "$BUILD_CONFIG"

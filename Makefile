@@ -1,4 +1,4 @@
-.PHONY: build release clean test install uninstall bundle notarize notarize-submit notarize-finalize notarize-status
+.PHONY: build release clean test install uninstall bundle bundle-release bundle-release-native notarize notarize-submit notarize-finalize notarize-status
 
 # Build configuration
 SWIFT_BUILD_FLAGS = --disable-sandbox
@@ -38,8 +38,11 @@ release: ## Build universal (arm64 + x86_64) release executable only (no app bun
 bundle: ## Build debug app bundle
 	./scripts/bundle.sh debug
 
-bundle-release: ## Build release app bundle
+bundle-release: ## Build universal (arm64 + x86_64) release app bundle
 	./scripts/bundle.sh release
+
+bundle-release-native: ## Build release app bundle for this Mac's architecture only
+	./scripts/bundle.sh release native
 
 test: ## Run tests
 	swift test $(SWIFT_BUILD_FLAGS)
@@ -49,7 +52,7 @@ clean: ## Clean build artifacts
 	rm -rf .build
 
 install: ## Install app bundle and CLI symlink (may require sudo)
-install: bundle-release
+install: bundle-release-native
 	@echo "Installing growlrrr.app to $(APP_INSTALL_PATH)..."
 	@if [ -w $(APP_INSTALL_PATH) ]; then \
 		cp -r .build/release/growlrrr.app $(APP_INSTALL_PATH)/; \

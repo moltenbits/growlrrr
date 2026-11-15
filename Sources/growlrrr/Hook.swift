@@ -66,6 +66,8 @@ extension Growlrrr.Hook {
         var gate: String?
 
         func run() async throws {
+            var reactivationContext = ReactivationContext.live()
+
             // Read stdin up front so the gate sees the same bytes we do.
             // See HookStdinPolicy for when --message lets us skip it.
             let stdinData: Data
@@ -89,7 +91,11 @@ extension Growlrrr.Hook {
             if let message {
                 subtitle = nil
                 resolvedMessage = message
-                stdinSessionId = nil
+                // If a gate required stdin, retain its session even when
+                // the message body was overridden. Without a gate,
+                // --message deliberately does not read stdin.
+                let json = try? JSONSerialization.jsonObject(with: stdinData) as? [String: Any]
+                stdinSessionId = json?["session_id"] as? String
             } else {
                 // Supports two schemas:
                 //   Stop event:         {"hook_event_name":"Stop", "last_assistant_message":"..."}
@@ -128,11 +134,10 @@ extension Growlrrr.Hook {
                 appId: appId)
             let identifier = replace ? "growlrrr-hook" : "growlrrr-hook-\(sessionId)"
 
-            // Build reactivate script
-            var executeCommand: String? = nil
-            if reactivate {
-                executeCommand = ReactivateScript.generate()
-            }
+            reactivationContext.hookSessionId = stdinSessionId
+            let reactivation = Reactivation()
+            guard reactivation.shouldNotify(in: reactivationContext) else { return }
+            let executeCommand = reactivate ? reactivation.clickCommand(in: reactivationContext) : nil
 
             // Handle custom app
             if let appId = appId {
@@ -148,8 +153,8 @@ extension Growlrrr.Hook {
                 if let sound = sound {
                     args += ["--sound", sound]
                 }
-                if reactivate {
-                    args += ["--reactivate"]
+                if let executeCommand {
+                    args += ["--execute", executeCommand]
                 }
                 args += ["--appId", appId, resolvedMessage]
 
@@ -225,6 +230,11 @@ extension Growlrrr.Hook {
         var gate: String?
 
         func run() async throws {
+            // Created before anything slow: a prompt was just submitted, so
+            // the frontmost app it captures is the one the prompt was typed
+            // into.
+            var reactivationContext = ReactivationContext.live()
+
             // Claude Code pipes hook JSON on stdin; skip it when run from a
             // terminal so a manual invocation doesn't block waiting for EOF.
             var stdinData = Data()
@@ -241,6 +251,11 @@ extension Growlrrr.Hook {
             if let gate, !Growlrrr.Hook.passesGate(gate, input: stdinData) {
                 return
             }
+
+            // After the gate, so a prompt the gate says is not the
+            // operator's does not change where a click will lead.
+            reactivationContext.hookSessionId = stdinSessionId
+            Reactivation().promptSubmitted(in: reactivationContext)
 
             let sessionId = HookSession.derive(
                 environmentSessionId: ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"],

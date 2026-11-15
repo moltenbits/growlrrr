@@ -520,7 +520,7 @@ extension Growlrrr {
             var executeCommand = execute
 
             if reactivate {
-                if let reactivateScript = ReactivateScript.generate() {
+                if let reactivateScript = Reactivation().clickCommand(in: .live()) {
                     // Combine with existing execute if present
                     if let existing = executeCommand {
                         executeCommand = "\(reactivateScript) ; \(existing)"
