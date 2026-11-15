@@ -28,6 +28,12 @@ public struct Reactivation {
         return method.clickCommand(in: context)
     }
 
+    /// Internal host jobs may run the same hooks as user conversations.
+    /// Only the innermost host knows whether such a hook should notify.
+    public func shouldNotify(in context: ReactivationContext) -> Bool {
+        method(for: context)?.shouldNotify(in: context) ?? true
+    }
+
     /// Tells the method that would handle a click that a prompt was just
     /// submitted.
     public func promptSubmitted(in context: ReactivationContext) {

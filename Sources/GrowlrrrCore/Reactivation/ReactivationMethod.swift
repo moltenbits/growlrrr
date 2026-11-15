@@ -24,6 +24,10 @@ public protocol ReactivationMethod: AnyObject {
     /// to leave the click without an action.
     func clickCommand(in context: ReactivationContext) -> String?
 
+    /// Whether this host's hook belongs to a conversation that should
+    /// notify. Hosts may also run internal jobs, such as title generation.
+    func shouldNotify(in context: ReactivationContext) -> Bool
+
     /// Called when a prompt is submitted from this method's host (`grrr hook
     /// dismiss`), for methods that need to remember something from that
     /// moment — see `ReactivationContext.frontmostApp` and `store(for:)`.
@@ -32,6 +36,8 @@ public protocol ReactivationMethod: AnyObject {
 
 extension ReactivationMethod {
     public static var layer: ReactivationLayer { .terminal }
+
+    public func shouldNotify(in context: ReactivationContext) -> Bool { true }
 
     public func promptSubmitted(in context: ReactivationContext) {}
 }

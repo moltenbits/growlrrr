@@ -2,8 +2,9 @@ import Foundation
 
 /// T3 Code: returns to the thread the agent is running in.
 ///
-/// T3 Code starts every agent with its thread id in `T3CODE_THREAD_ID`. The
-/// thread can be shown by the T3 Code desktop app, or by any number of
+/// Claude inherits `T3CODE_THREAD_ID`; Codex hooks instead identify their
+/// session on stdin, which T3 Code's local state associates with a thread.
+/// The thread can be shown by the T3 Code desktop app, or by any number of
 /// Safari "Add to Dock" web apps made from T3 Code's site — someone may keep
 /// several, each filtered to one project. Nothing ties a thread to one of
 /// those, so this method remembers which one each thread was last prompted
@@ -19,7 +20,20 @@ public final class T3CodeReactivation: ReactivationMethod {
     public init() {}
 
     public func applies(in context: ReactivationContext) -> Bool {
-        threadId(in: context) != nil
+        explicitThreadId(in: context) != nil
+            || !(context.environment["T3CODE_CLI_PATH"] ?? "").isEmpty
+            || context.environment["CODEX_INTERNAL_ORIGINATOR_OVERRIDE"] == "T3"
+    }
+
+    /// T3 Code also runs Codex for internal jobs such as generating titles.
+    /// Their sessions have no app thread and should not send notifications.
+    /// A failed lookup preserves the notification, without a click action.
+    public func shouldNotify(in context: ReactivationContext) -> Bool {
+        guard explicitThreadId(in: context) == nil,
+              let threads = codexThreadIds(in: context) else {
+            return true
+        }
+        return !threads.isEmpty
     }
 
     /// Opens the thread in the web app remembered for it, or in the desktop
@@ -74,10 +88,56 @@ public final class T3CodeReactivation: ReactivationMethod {
     }
 
     private func threadId(in context: ReactivationContext) -> String? {
+        if let threadId = explicitThreadId(in: context) {
+            return threadId
+        }
+        guard let threads = codexThreadIds(in: context), threads.count == 1 else {
+            return nil
+        }
+        return threads[0]
+    }
+
+    private func explicitThreadId(in context: ReactivationContext) -> String? {
         guard let threadId = context.environment["T3CODE_THREAD_ID"], !threadId.isEmpty else {
             return nil
         }
         return threadId
+    }
+
+    /// The CLI does not expose lookup by provider session. Read only the
+    /// existing local projection; never guess from cwd or modify T3's state.
+    /// `provider_session_id` identifies the shared app-server, whereas
+    /// nativeThreadRef.nativeId is the Codex session in hook stdin.
+    /// Nil means unavailable/changed schema; an empty array means no thread.
+    private func codexThreadIds(in context: ReactivationContext) -> [String]? {
+        guard let sessionId = context.hookSessionId, !sessionId.isEmpty,
+              !sessionId.contains("\0") else {
+            return nil
+        }
+        let home: URL
+        if let path = context.environment["T3CODE_HOME"], !path.isEmpty {
+            home = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        } else {
+            home = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".t3")
+        }
+        let database = home.appendingPathComponent("userdata/statev2.sqlite")
+        let session = sessionId.replacingOccurrences(of: "'", with: "''")
+        let query = """
+            SELECT json_group_array(thread_id) FROM (
+                SELECT DISTINCT thread_id
+                FROM orchestration_v2_projection_provider_threads
+                WHERE provider = 'codex' AND owner_node_id IS NULL
+                  AND thread_id IS NOT NULL AND thread_id != ''
+                  AND json_extract(payload_json, '$.nativeThreadRef.nativeId') = '\(session)'
+                LIMIT 2
+            );
+            """
+        guard let output = context.run("/usr/bin/sqlite3",
+            ["-init", "/dev/null", "-readonly", "-batch", database.path, query],
+            timeout: Self.lookupTimeout) else {
+            return nil
+        }
+        return try? JSONDecoder().decode([String].self, from: output)
     }
 
     /// Asks the t3 CLI for the thread. T3 Code usually names its own CLI in

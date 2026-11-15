@@ -13,6 +13,11 @@ public struct ReactivationContext {
     /// notification, inherited from the terminal or app it runs in.
     public let environment: [String: String]
 
+    /// The agent's session id from hook stdin, before notification identity
+    /// overrides such as GROWLRRR_SESSION_ID or --appId are applied. Added
+    /// after reading stdin so the frontmost app can be captured first.
+    public var hookSessionId: String?
+
     /// The app bundle that was frontmost when growlrrr started. When a
     /// prompt has just been submitted, this is the app it was typed into.
     public let frontmostApp: URL?

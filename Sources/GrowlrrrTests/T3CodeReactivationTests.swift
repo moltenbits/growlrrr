@@ -47,11 +47,12 @@ final class T3CodeReactivationTests: XCTestCase {
     private func context(
         threadId: String? = nil,
         environment: [String: String] = ["T3CODE_CLI_PATH": "/Users/me/.t3/bin/t3"],
-        frontmostApp: URL? = nil
+        frontmostApp: URL? = nil,
+        hookSessionId: String? = nil
     ) -> ReactivationContext {
         var environment = environment
         environment["T3CODE_THREAD_ID"] = threadId ?? self.threadId
-        return ReactivationContext(
+        var context = ReactivationContext(
             environment: environment,
             frontmostApp: frontmostApp,
             stateDirectory: scratch.appendingPathComponent("state"),
@@ -59,12 +60,133 @@ final class T3CodeReactivationTests: XCTestCase {
             run: { executable, arguments, timeout in
                 self.commandsRun.append(
                     [executable] + arguments + ["timeout=\(timeout.map { String($0) } ?? "none")"])
+                if executable == "/usr/bin/sqlite3" {
+                    return self.runSQLite(arguments)
+                }
                 guard let link = self.threadLink else {
                     return nil
                 }
                 let json: [String: Any] = ["thread": ["link": link], "messages": []]
                 return try? JSONSerialization.data(withJSONObject: json)
             })
+        context.hookSessionId = hookSessionId
+        return context
+    }
+
+    private func runSQLite(_ arguments: [String]) -> Data? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+        process.arguments = arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        let output = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return process.terminationStatus == 0 ? output : nil
+    }
+
+    private var t3Database: URL { scratch.appendingPathComponent("userdata/statev2.sqlite") }
+
+    private func makeT3Database() throws {
+        try FileManager.default.createDirectory(at: t3Database.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        // Relevant columns from T3 Code's provider-thread projection. The
+        // Codex session is nativeThreadRef.nativeId, NOT provider_session_id
+        // (which identifies the shared app-server process).
+        XCTAssertNotNil(runSQLite([t3Database.path, """
+            CREATE TABLE orchestration_v2_projection_provider_threads (
+                thread_id TEXT, provider TEXT, owner_node_id TEXT, payload_json TEXT NOT NULL
+            );
+            """]))
+    }
+
+    private func addCodexSession(_ session: String, thread: String, provider: String = "codex") throws {
+        let payload = try JSONSerialization.data(withJSONObject: ["nativeThreadRef": ["nativeId": session]])
+        func quoted(_ value: String) -> String { "'" + value.replacingOccurrences(of: "'", with: "''") + "'" }
+        XCTAssertNotNil(runSQLite([t3Database.path, """
+            INSERT INTO orchestration_v2_projection_provider_threads VALUES (
+                \(quoted(thread)), \(quoted(provider)), NULL, \(quoted(String(decoding: payload, as: UTF8.self)))
+            );
+            """]))
+    }
+
+    private func codexContext(session: String? = "codex-session", frontmostApp: URL? = nil) -> ReactivationContext {
+        context(threadId: "", environment: [
+            "T3CODE_CLI_PATH": "/Users/me/.t3/bin/t3", "T3CODE_HOME": scratch.path,
+        ], frontmostApp: frontmostApp, hookSessionId: session)
+    }
+
+    func testCodexHookFindsItsExactThreadAndRemembersThePromptingWebApp() throws {
+        try makeT3Database()
+        try addCodexSession("other-session", thread: "other-thread")
+        try addCodexSession("codex-session", thread: threadId)
+        let webApp = try makeApp(named: "T3 Code (Growlrrr)", webAppStartURL: "https://app.t3.codes/")
+        let reactivation = Reactivation(methods: [T3CodeReactivation()])
+
+        reactivation.promptSubmitted(in: codexContext(frontmostApp: webApp))
+
+        XCTAssertTrue(reactivation.shouldNotify(in: codexContext()))
+        XCTAssertEqual(reactivation.clickCommand(in: codexContext()),
+            "open -a '\(webApp.path)' 'https://app.t3.codes/threads/7e9a75d0-3c28-48ef-a9f3-9551e82938b6/\(threadId)'")
+        XCTAssertTrue(commandsRun.contains { $0.contains("show") && $0.contains(threadId) })
+        XCTAssertFalse(commandsRun.contains { $0.contains("show") && $0.contains("other-thread") })
+    }
+
+    func testT3TitleGenerationWithoutAnAppThreadDoesNotNotify() throws {
+        try makeT3Database()
+        try addCodexSession("real-session", thread: threadId)
+        let reactivation = Reactivation(methods: [T3CodeReactivation()])
+
+        XCTAssertFalse(reactivation.shouldNotify(in: codexContext(session: "ephemeral-title-session")))
+        XCTAssertNil(reactivation.clickCommand(in: codexContext(session: "ephemeral-title-session")))
+    }
+
+    func testUnreadableT3StatePreservesTheNotificationButLeavesTheClickWithoutAnAction() throws {
+        let reactivation = Reactivation(methods: [T3CodeReactivation()])
+        XCTAssertTrue(reactivation.shouldNotify(in: codexContext()))
+        XCTAssertNil(reactivation.clickCommand(in: codexContext()))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: t3Database.path), "Lookup must not create a database")
+
+        try FileManager.default.createDirectory(at: t3Database.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data("not a sqlite database".utf8).write(to: t3Database)
+        XCTAssertTrue(reactivation.shouldNotify(in: codexContext()))
+        XCTAssertNil(reactivation.clickCommand(in: codexContext()))
+    }
+
+    func testAmbiguousCodexSessionNeverChoosesAnArbitraryThread() throws {
+        try makeT3Database()
+        try addCodexSession("codex-session", thread: threadId)
+        try addCodexSession("codex-session", thread: "another-thread")
+        let reactivation = Reactivation(methods: [T3CodeReactivation()])
+
+        XCTAssertTrue(reactivation.shouldNotify(in: codexContext()))
+        XCTAssertNil(reactivation.clickCommand(in: codexContext()))
+    }
+
+    func testCodexSessionLookupDoesNotMatchAnotherProviderOrInterpretSQL() throws {
+        try makeT3Database()
+        try addCodexSession("codex-session", thread: "claude-thread", provider: "claudeAgent")
+        let reactivation = Reactivation(methods: [T3CodeReactivation()])
+
+        XCTAssertNil(reactivation.clickCommand(in: codexContext()))
+        XCTAssertNil(reactivation.clickCommand(in: codexContext(session: "' OR 1=1 --")))
+    }
+
+    func testAnExplicitThreadTakesPrecedenceOverTheCodexSession() {
+        let context = context(hookSessionId: "codex-session")
+        let reactivation = Reactivation(methods: [T3CodeReactivation()])
+
+        XCTAssertTrue(reactivation.shouldNotify(in: context))
+        XCTAssertEqual(reactivation.clickCommand(in: context), desktopCommand)
+        XCTAssertFalse(commandsRun.contains { $0.first == "/usr/bin/sqlite3" })
+    }
+
+    func testNotificationsWithoutAHookSessionAreNotSuppressed() {
+        let reactivation = Reactivation(methods: [T3CodeReactivation()])
+        XCTAssertTrue(reactivation.shouldNotify(in: codexContext(session: nil)))
+        XCTAssertTrue(reactivation.shouldNotify(in: ReactivationContext(stateDirectory: scratch)))
     }
 
     // MARK: - Recognising a T3 Code thread
@@ -138,6 +260,17 @@ final class T3CodeReactivationTests: XCTestCase {
             hostApp: { self.desktopApp })
 
         XCTAssertNil(Reactivation(methods: [T3CodeReactivation()]).clickCommand(in: underT3Code))
+    }
+
+    func testAT3CodeHookWithoutAThreadDoesNotActivateTheDesktopAppOrInheritedTerminal() {
+        let underT3Code = ReactivationContext(
+            environment: ["T3CODE_CLI_PATH": "/Users/me/.t3/bin/t3", "TERM_PROGRAM": "iTerm.app"],
+            stateDirectory: scratch,
+            hostApp: { self.desktopApp })
+
+        XCTAssertTrue(T3CodeReactivation().applies(in: underT3Code))
+        XCTAssertNil(Reactivation(methods: [T3CodeReactivation(), ITermReactivation()])
+            .clickCommand(in: underT3Code))
     }
 
     // MARK: - Remembering the web app a prompt came from
