@@ -66,7 +66,7 @@ extension Growlrrr.Hook {
         var gate: String?
 
         func run() async throws {
-            var reactivationContext = ReactivationContext.live()
+            var adapterContext = AdapterContext.live()
 
             // Read stdin up front so the gate sees the same bytes we do.
             // See HookStdinPolicy for when --message lets us skip it.
@@ -132,10 +132,10 @@ extension Growlrrr.Hook {
                 appId: appId)
             let identifier = replace ? "growlrrr-hook" : "growlrrr-hook-\(sessionId)"
 
-            reactivationContext.hookSessionId = stdinSessionId
-            let reactivation = Reactivation()
-            guard reactivation.shouldNotify(in: reactivationContext) else { return }
-            let executeCommand = reactivate ? reactivation.clickCommand(in: reactivationContext) : nil
+            adapterContext.hookSessionId = stdinSessionId
+            let adapters = ApplicationAdapters()
+            guard adapters.shouldNotify(in: adapterContext) else { return }
+            let executeCommand = reactivate ? adapters.clickCommand(in: adapterContext) : nil
 
             // Handle custom app
             if let appId = appId {
@@ -231,7 +231,7 @@ extension Growlrrr.Hook {
             // Created before anything slow: a prompt was just submitted, so
             // the frontmost app it captures is the one the prompt was typed
             // into.
-            var reactivationContext = ReactivationContext.live()
+            var adapterContext = AdapterContext.live()
 
             // Claude Code pipes hook JSON on stdin; skip it when run from a
             // terminal so a manual invocation doesn't block waiting for EOF.
@@ -252,8 +252,8 @@ extension Growlrrr.Hook {
 
             // After the gate, so a prompt the gate says is not the
             // operator's does not change where a click will lead.
-            reactivationContext.hookSessionId = stdinSessionId
-            Reactivation().promptSubmitted(in: reactivationContext)
+            adapterContext.hookSessionId = stdinSessionId
+            ApplicationAdapters().promptSubmitted(in: adapterContext)
 
             let sessionId = HookSession.derive(
                 environmentSessionId: ProcessInfo.processInfo.environment["GROWLRRR_SESSION_ID"],

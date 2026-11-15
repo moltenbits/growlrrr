@@ -8,7 +8,7 @@ The Claude Code and Codex hook integrations described in the main README work un
 
 Claude Code inherits its T3 thread id in `T3CODE_THREAD_ID`. T3 Code gives Codex that variable through `shell_environment_policy.set`, but Codex does not pass that setting to hook commands ([upstream issue](https://github.com/openai/codex/issues/40325)). Codex hooks instead provide their Codex `session_id` on stdin.
 
-growlrrr recognises T3 Code through `T3CODE_THREAD_ID`, `T3CODE_CLI_PATH`, or Codex's `CODEX_INTERNAL_ORIGINATOR_OVERRIDE=T3`. When the thread id is absent, `T3CodeReactivation` matches the hook's session id against T3's local provider-thread records. It reads `$T3CODE_HOME/userdata/statev2.sqlite` (default `~/.t3/userdata/statev2.sqlite`) with the system SQLite CLI in read-only mode. The matching value is `nativeThreadRef.nativeId` in `orchestration_v2_projection_provider_threads.payload_json`; `provider_session_id` identifies the shared Codex app-server and cannot identify a conversation. growlrrr requires one distinct app thread and never guesses from the working directory.
+growlrrr recognises T3 Code through `T3CODE_THREAD_ID`, `T3CODE_CLI_PATH`, or Codex's `CODEX_INTERNAL_ORIGINATOR_OVERRIDE=T3`. When the thread id is absent, `T3CodeAdapter` matches the hook's session id against T3's local provider-thread records. It reads `$T3CODE_HOME/userdata/statev2.sqlite` (default `~/.t3/userdata/statev2.sqlite`) with the system SQLite CLI in read-only mode. The matching value is `nativeThreadRef.nativeId` in `orchestration_v2_projection_provider_threads.payload_json`; `provider_session_id` identifies the shared Codex app-server and cannot identify a conversation. growlrrr requires one distinct app thread and never guesses from the working directory.
 
 Once the thread is identified, growlrrr looks it up with `t3 thread show <id> --json`, using the CLI named in `T3CODE_CLI_PATH`, or `t3` on `PATH` when that is not set. Each command lookup is limited to 5 seconds.
 
@@ -24,7 +24,7 @@ T3 Code generates titles with a separate, ephemeral Codex process in the project
 
 T3 Code can also be used through Safari "Add to Dock" web apps, and several can be made from the same site, for example one per project, each with its own filters. The click then opens the thread in the web app you last prompted it from:
 
-- When you submit a prompt, `grrr hook dismiss` looks at the frontmost app. If it is a web app made from the same site as the thread's link, growlrrr remembers that web app for the thread, in `~/.growlrrr/reactivation/T3CodeReactivation/`.
+- When you submit a prompt, `grrr hook dismiss` looks at the frontmost app. If it is a web app made from the same site as the thread's link, growlrrr remembers that web app for the thread, in `~/.growlrrr/reactivation/T3CodeAdapter/`.
 - When the turn ends, `grrr hook notify` builds the click action from what was remembered, so the notification brings that web app forward on the thread.
 - With `--appId`, the hook resolves the click action before handing the notification to the custom bundle, preserving the session information from stdin.
 - Prompting the thread from a different web app replaces what was remembered. Prompting it from the desktop app clears it, so notifications lead to the desktop app again.
@@ -45,4 +45,4 @@ None.
 
 ## Implementation
 
-`T3CodeReactivation` and `T3CodeThread` in `Sources/GrowlrrrCore/Reactivation/`.
+`T3CodeAdapter` and `T3CodeThread` in `Sources/GrowlrrrCore/Adapters/`.

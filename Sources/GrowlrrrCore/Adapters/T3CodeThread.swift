@@ -56,7 +56,7 @@ public struct T3CodeThread: Equatable {
     /// say which one to bring forward.
     public func webAppRevealCommand(appPath: String) -> String {
         let link = "\(origin)/threads/\(environmentId)/\(threadId)"
-        return "open -a \(ReactivationContext.shellQuoted(appPath)) '\(link)'"
+        return "open -a \(AdapterContext.shellQuoted(appPath)) '\(link)'"
     }
 
     /// The origin a Safari "Add to Dock" web app was made from, read from

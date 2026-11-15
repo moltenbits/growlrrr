@@ -327,11 +327,11 @@ With `--reactivate`, clicking a notification returns you to where it was sent fr
 
 How precisely growlrrr can return depends on the application the notification was sent from. Each supported application has its own page describing what a click does there, what it needs, and its limits:
 
-- [iTerm2](docs/reactivation/iterm2.md)
-- [Terminal.app](docs/reactivation/terminal-app.md)
-- [Ghostty](docs/reactivation/ghostty.md)
-- [Warp, Alacritty, and kitty](docs/reactivation/named-terminals.md)
-- [T3 Code](docs/reactivation/t3-code.md)
+- [iTerm2](docs/applications/iterm2.md)
+- [Terminal.app](docs/applications/terminal-app.md)
+- [Ghostty](docs/applications/ghostty.md)
+- [Warp, Alacritty, and kitty](docs/applications/named-terminals.md)
+- [T3 Code](docs/applications/t3-code.md)
 
 From any other application, the click brings forward the app the command was running in: the nearest app among the command's parent processes, such as an editor whose integrated terminal ran it.
 
@@ -463,27 +463,27 @@ Each custom app created with `grrr apps add` has its own bundle identifier, whic
 
 ## Adding a Reactivation Method
 
-`--reactivate` works through reactivation methods: one class per application that growlrrr knows how to return to. They live in `Sources/GrowlrrrCore/Reactivation/`. To support another application, add one file there with a `final class` that conforms to `ReactivationMethod`:
+`--reactivate` works through reactivation methods: one class per application that growlrrr knows how to return to. They live in `Sources/GrowlrrrCore/Adapters/`. To support another application, add one file there with a `final class` that conforms to `ApplicationAdapter`:
 
 ```swift
-public final class MyTerminalReactivation: ReactivationMethod {
+public final class MyTerminalAdapter: ApplicationAdapter {
     public init() {}
 
     // Is the notification being sent from my terminal?
-    public func applies(in context: ReactivationContext) -> Bool {
+    public func applies(in context: AdapterContext) -> Bool {
         context.environment["TERM_PROGRAM"] == "MyTerminal"
     }
 
     // The shell command a click should run, built while the notification is sent.
-    public func clickCommand(in context: ReactivationContext) -> String? {
+    public func clickCommand(in context: AdapterContext) -> String? {
         "osascript -e 'tell application \"MyTerminal\" to activate'"
     }
 }
 ```
 
-growlrrr finds every class that conforms to `ReactivationMethod` when it starts, which is why a method is a class and not a struct.
+growlrrr finds every class that conforms to `ApplicationAdapter` when it starts, which is why a method is a class and not a struct.
 
-`ReactivationContext` supplies what methods commonly need:
+`AdapterContext` supplies what methods commonly need:
 
 | Member | What it gives you |
 |--------|-------------------|
@@ -498,13 +498,13 @@ growlrrr finds every class that conforms to `ReactivationMethod` when it starts,
 Two optional parts of the protocol:
 
 - **`promptSubmitted(in:)`** is called when a prompt is submitted (`grrr hook dismiss`). Implement it if the method has to remember something from that moment, such as which app the prompt was typed into.
-- **`static let layer`** says how deeply the method's host is nested, and only matters when several methods apply at once. The default, `.terminal`, is right for a terminal. An app that runs agents and can itself be started from a terminal declares `.agentHost`, so it wins over the terminal whose variables it inherited. Two methods in the same layer should never apply to the same notification; if they do, growlrrr picks one by name and prints a warning.
+- **`static let layer`** says how deeply the method's adapter is nested, and only matters when several methods apply at once. The default, `.terminal`, is right for a terminal. An app that runs agents and can itself be started from a terminal declares `.agentApp`, so it wins over the terminal whose variables it inherited. Two methods in the same layer should never apply to the same notification; if they do, growlrrr picks one by name and prints a warning.
 
 When no method applies, growlrrr activates the nearest app among the sender's parent processes.
 
-Add tests next to the others in `Sources/GrowlrrrTests/`: a `ReactivationContext` can be built from explicit parts, with a fake command runner, so a method's commands can be checked without the application being installed (see `TerminalReactivationTests`).
+Add tests next to the others in `Sources/GrowlrrrTests/`: an `AdapterContext` can be built from explicit parts, with a fake command runner, so a method's commands can be checked without the application being installed (see `TerminalAdapterTests`).
 
-Document the application in its own page, `docs/reactivation/<application>.md`, following the existing pages, and link the page from the list under [Reactivation](#reactivation). Details about one application belong in its page, not in this README.
+Document the application in its own page, `docs/applications/<application>.md`, following the existing pages, and link the page from the list under [Reactivation](#reactivation). Details about one application belong in its page, not in this README.
 
 ### Doing it with an AI coding agent
 
@@ -514,7 +514,7 @@ Replace `<APPLICATION>` and give this prompt to an agent working in a clone of t
 Add support to growlrrr for returning to <APPLICATION> when a notification is clicked.
 
 Read AGENTS.md and the "Adding a Reactivation Method" section of README.md, then the
-existing methods in Sources/GrowlrrrCore/Reactivation/ and their tests in
+existing methods in Sources/GrowlrrrCore/Adapters/ and their tests in
 Sources/GrowlrrrTests/.
 
 1. Investigate before writing code, on this machine, with <APPLICATION> running:
@@ -530,20 +530,20 @@ Sources/GrowlrrrTests/.
    <APPLICATION> offers nothing more specific than that, say so instead of writing
    a method.
 
-2. Write the tests first, in a new file in Sources/GrowlrrrTests/. Build a
-   ReactivationContext with the environment you found and a fake command runner, and
+2. Write the tests first, in a new file in Sources/GrowlrrrTests/. Build an
+   AdapterContext with the environment you found and a fake command runner, and
    assert on the exact click command. Cover the case where the window cannot be
    identified. Run them and confirm they fail because the method does not exist yet.
 
-3. Add the method: one final class conforming to ReactivationMethod, in its own file
-   in Sources/GrowlrrrCore/Reactivation/. Change no other source file.
+3. Add the method: one final class conforming to ApplicationAdapter, in its own file
+   in Sources/GrowlrrrCore/Adapters/. Change no other source file.
    - applies(in:) must be a cheap check that is true only inside <APPLICATION>.
    - clickCommand(in:) returns the shell command the click runs. Pass every
-     interpolated value through ReactivationContext.shellQuoted, or validate it
+     interpolated value through AdapterContext.shellQuoted, or validate it
      against a fixed set of characters.
    - Give context.run a timeout for any command that could hang.
    - Leave the layer at its default unless <APPLICATION> runs agents in its own
-     windows and can itself be started from a terminal; then declare .agentHost.
+     windows and can itself be started from a terminal; then declare .agentApp.
 
 4. Check it for real. Run `make bundle`, then from inside <APPLICATION> run
    `.build/debug/growlrrr.app/Contents/MacOS/growlrrr send --reactivate "test"` and
@@ -552,7 +552,7 @@ Sources/GrowlrrrTests/.
    Ask me to switch to another window and click the notification, and to tell you
    where it took me.
 
-5. Document it: add docs/reactivation/<application>.md following the existing pages
+5. Document it: add docs/applications/<application>.md following the existing pages
    (what a click does, how it works, limits, permissions, implementation), and link
    it from the list under "Reactivation" in README.md. Put nothing else about
    <APPLICATION> in README.md.
